@@ -1,4 +1,3 @@
-/* api.js — lớp DUY NHẤT nói chuyện với Supabase và R2. Trang HTML chỉ gọi API.xxx(), không tự viết truy vấn. */
 (() => {
   const cfg = window.APP_CONFIG || {};
   const sb =
@@ -6,7 +5,7 @@
       ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY)
       : null;
   const PAGE = 20;
-  const CARD = "id,title,cover_key,rating_avg,view_count,chapter_count,profiles(display_name)";
+  const CARD = "id,title,cover_key,rating_avg,view_count,chapter_count,rating_count,profiles!author_id(display_name)";
   const MSG = {
     "Invalid login credentials": "Sai email hoặc mật khẩu.",
     "User already registered": "Email này đã được đăng ký.",
@@ -104,7 +103,7 @@
     const s = await rows(
       db()
         .from("stories")
-        .select("*,profiles(display_name),story_genres(genres(id,name))")
+        .select("*,profiles!author_id(display_name),story_genres(genres(id,name))")
         .eq("id", id)
         .single(),
     );
@@ -207,7 +206,7 @@
     rows(
       db()
         .from("comments")
-        .select("id,body,created_at,user_id,profiles(display_name)")
+        .select("id,body,created_at,user_id,profiles!user_id(display_name)")
         .eq("story_id", storyId)
         .order("created_at", { ascending: false })
         .range(page * PAGE, page * PAGE + PAGE - 1),
@@ -312,7 +311,7 @@
     rows(
       db()
         .from("stories")
-        .select("id,title,description,created_at,profiles(display_name)")
+        .select("id,title,description,created_at,profiles!author_id(display_name)")
         .eq("status", "pending")
         .order("created_at"),
     );

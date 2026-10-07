@@ -38,7 +38,7 @@
           $("box").innerHTML =
             `<div class="row" style="align-items:flex-start"><div style="width:130px">${coverHTML(s, true)}</div>
       <div style="flex:1;min-width:200px"><h1>${esc(s.title)}</h1>
-      <p class="muted">${esc(s.author)} · ★ ${s.rating_avg} (${s.rating_count}) · ${fmt(s.view_count)} lượt đọc</p>
+      <p class="muted">${esc(s.author)} · ${s.rating_count ? "★ " + Number(s.rating_avg).toFixed(1) + " (" + s.rating_count + ")" : "Chưa có đánh giá"} · ${fmt(s.view_count)} lượt đọc</p>
       <p style="margin:8px 0">${s.genres.map((g) => `<span class="chip">${esc(g.name)}</span>`).join("")}</p><p>${esc(s.description)}</p>
       <p class="row" style="margin-top:14px">${startNum ? `<a class="btn" href="reader.html?id=${id}&ch=${startNum}">${resume ? "Đọc tiếp chương " : "Đọc từ chương "}${startNum}</a>` : ""}
       <button class="btn ghost" id="fol"></button></p></div></div>`;
