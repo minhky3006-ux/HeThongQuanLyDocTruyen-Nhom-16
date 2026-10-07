@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Khu vực tác giả · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="author" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Khu vực tác giả</h1>
+      <div id="gate" style="margin-top: 14px"></div>
+      <section id="studio" hidden>
+        <h2>Đăng truyện mới</h2>
+        <form class="card" id="nf">
+          <div class="field">
+            <label for="title">Tên truyện</label><input id="title" class="input" required maxlength="120" />
+          </div>
+          <div class="field">
+            <label for="desc">Giới thiệu</label
+            ><textarea id="desc" class="input" rows="4" maxlength="2000"></textarea>
+          </div>
+          <div class="field">
+            <label for="kind">Loại truyện</label
+            ><select id="kind" class="input">
+              <option value="text">Truyện chữ</option>
+              <option value="comic">Truyện tranh</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Thể loại</label>
+            <div id="gl"></div>
+          </div>
+          <div class="field">
+            <label for="cover">Ảnh bìa (không bắt buộc)</label
+            ><input id="cover" type="file" accept="image/*" />
+          </div>
+          <button class="btn">Gửi duyệt</button>
+          <p class="msg" id="nm" hidden role="alert"></p>
+        </form>
+        <h2>Truyện của tôi</h2>
+        <div class="card" id="mine"></div>
+      </section>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      (async () => {
+        try {
+          const u = await API.currentUser();
+          if (!u) {
+            $("gate").innerHTML =
+              `<div class="card empty">Bạn cần <a href="../auth/login.html?next=${encodeURIComponent(location.pathname)}" style="color:var(--primary-dark);font-weight:600">đăng nhập</a> để đăng truyện.</div>`;
+            return;
+          }
+          const me = await API.getProfile();
+          if (me.role === "member") {
+            $("gate").innerHTML =
+              `<div class="card empty">Tài khoản của bạn chưa phải tác giả.<br><br><button class="btn" id="be">Trở thành tác giả</button></div>`;
+            $("be").onclick = async () => {
+              try {
+                await API.becomeAuthor();
+                location.reload();
+              } catch (e) {
+                alert(e.message);
+              }
+            };
+            return;
+          }
+          $("studio").hidden = false;
+          API.listGenres().then((gs) => {
+            $("gl").innerHTML = gs
+              .map(
+                (g) => `<label class="chip"><input type="checkbox" value="${g.id}"> ${esc(g.name)}</label>`,
+              )
+              .join("");
+          });
+          async function loadMine() {
+            const list = await API.myStories();
+            $("mine").innerHTML =
+              list
+                .map(
+                  (s) =>
+                    `<div class="mine-row"><div><strong>${esc(s.title)}</strong> <span class="badge">${STATUS_VI[s.status]}</span><br><span class="muted" style="font-size:.85rem">${s.chapter_count} chương · ${fmt(s.view_count)} lượt đọc</span></div><a class="btn ghost" href="chapters.html?id=${s.id}">Quản lý chương</a></div>`,
+                )
+                .join("") || emptyHTML("Bạn chưa đăng truyện nào.");
+          }
+          loadMine();
+          $("nf").onsubmit = async (e) => {
+            e.preventDefault();
+            const b = $("nf").querySelector("button");
+            b.disabled = true;
+            $("nm").hidden = true;
+            try {
+              const s = await API.createStory({
+                title: $("title").value.trim(),
+                description: $("desc").value.trim(),
+                kind: $("kind").value,
+                genreIds: [...document.querySelectorAll("#gl input:checked")].map((i) => +i.value),
+              });
+              let note = "";
+              const f = $("cover").files[0];
+              if (f) {
+                try {
+                  await API.uploadCover(s.id, f);
+                } catch (err) {
+                  note = " Tải ảnh bìa lỗi: " + err.message;
+                }
+              }
+              $("nf").reset();
+              showMsg($("nm"), "Đã gửi, truyện sẽ hiển thị sau khi quản trị viên duyệt." + note, !note);
+              loadMine();
+            } catch (err) {
+              showMsg($("nm"), err.message);
+            } finally {
+              b.disabled = false;
+            }
+          };
+        } catch (e) {
+          showError($("gate"), e);
+        }
+      })();
+    </script>
+  </body>
+</html>

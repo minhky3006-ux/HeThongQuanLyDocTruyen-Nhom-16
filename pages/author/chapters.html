@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Quản lý chương · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="author" data-root="../../">
+    <main class="container">
+      <p style="margin-top: 16px"><a href="dashboard.html" class="muted">‹ Truyện của tôi</a></p>
+      <h1 id="h" style="margin-top: 6px"></h1>
+      <div class="card" id="list" style="margin-top: 14px"></div>
+      <h2 id="fh">Thêm chương</h2>
+      <form class="card" id="cf">
+        <div class="field">
+          <label for="ct">Tiêu đề chương</label><input id="ct" class="input" maxlength="120" />
+        </div>
+        <div class="field" id="textf">
+          <label for="cc">Nội dung</label><textarea id="cc" class="input" rows="12"></textarea>
+        </div>
+        <div class="field" id="imgf" hidden>
+          <label for="files">Ảnh các trang (chọn nhiều ảnh, xếp theo tên file)</label
+          ><input id="files" type="file" accept="image/*" multiple />
+        </div>
+        <div class="row">
+          <button class="btn" id="sub">Đăng chương</button
+          ><button type="button" class="btn ghost" id="cancel" hidden>Hủy sửa</button>
+        </div>
+        <p class="msg" id="cm" hidden role="alert"></p>
+      </form>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      (async () => {
+        const id = +new URLSearchParams(location.search).get("id");
+        let story,
+          editing = null;
+        const comic = () => story.kind === "comic";
+        function mode(ch) {
+          editing = ch;
+          $("fh").textContent = ch ? `Sửa chương ${ch.number}` : "Thêm chương";
+          $("sub").textContent = ch ? "Lưu thay đổi" : "Đăng chương";
+          $("cancel").hidden = !ch;
+          $("imgf").hidden = !comic() || !!ch;
+          $("textf").hidden = comic();
+          $("ct").value = ch?.title || "";
+          $("cc").value = ch?.content || "";
+          $("files").value = "";
+        }
+        async function loadList() {
+          const chs = await API.listChapters(id);
+          $("list").innerHTML =
+            chs
+              .map(
+                (c) =>
+                  `<div class="mine-row"><span>Chương ${c.number}${c.title ? ": " + esc(c.title) : ""}</span><span class="row"><button class="btn ghost" data-e="${c.number}">Sửa</button><button class="btn ghost" data-d="${c.id}">Xóa</button></span></div>`,
+              )
+              .join("") || emptyHTML("Chưa có chương nào.");
+        }
+        try {
+          story = await API.getStory(id);
+          $("h").textContent = story.title;
+          mode(null);
+          await loadList();
+          $("list").onclick = async (e) => {
+            const b = e.target.closest("button");
+            if (!b) return;
+            try {
+              if (b.dataset.e) {
+                mode(await API.getChapter(id, +b.dataset.e));
+                scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+              } else if (b.dataset.d && confirm("Xóa chương này? Không thể hoàn tác.")) {
+                await API.deleteChapter(+b.dataset.d);
+                mode(null);
+                await loadList();
+              }
+            } catch (err) {
+              showMsg($("cm"), err.message);
+            }
+          };
+          $("cancel").onclick = () => mode(null);
+          $("cf").onsubmit = async (e) => {
+            e.preventDefault();
+            $("sub").disabled = true;
+            $("cm").hidden = true;
+            try {
+              const title = $("ct").value.trim();
+              if (editing)
+                await API.updateChapter(editing.id, { title, content: comic() ? null : $("cc").value });
+              else if (comic()) {
+                if (!$("files").files.length) throw new Error("Hãy chọn ít nhất 1 ảnh.");
+                await API.addComicChapter(id, {
+                  title,
+                  files: $("files").files,
+                  onProgress: (d, n) => showMsg($("cm"), `Đang tải ảnh ${d}/${n}...`, true),
+                });
+              } else {
+                if (!$("cc").value.trim()) throw new Error("Hãy nhập nội dung chương.");
+                await API.addChapter(id, { title, content: $("cc").value });
+              }
+              mode(null);
+              await loadList();
+              showMsg($("cm"), "Đã lưu.", true);
+            } catch (err) {
+              showMsg($("cm"), err.message);
+            } finally {
+              $("sub").disabled = false;
+            }
+          };
+        } catch (e) {
+          showError($("list"), e);
+        }
+      })();
+    </script>
+  </body>
+</html>

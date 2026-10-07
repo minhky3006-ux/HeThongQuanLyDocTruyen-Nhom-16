@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Đăng ký · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="login" data-root="../../">
+    <main class="container">
+      <form class="card narrow" id="f">
+        <h1 style="margin-bottom: 16px">Đăng ký</h1>
+        <div class="field">
+          <label for="name">Tên hiển thị</label><input id="name" class="input" required maxlength="40" />
+        </div>
+        <div class="field">
+          <label for="email">Email</label
+          ><input id="email" type="email" class="input" required autocomplete="email" />
+        </div>
+        <div class="field">
+          <label for="pw">Mật khẩu (từ 6 ký tự)</label
+          ><input id="pw" type="password" class="input" required minlength="6" autocomplete="new-password" />
+        </div>
+        <label style="display: block; margin-bottom: 14px; font-size: 0.9rem"
+          ><input type="checkbox" id="au" /> Tôi muốn đăng truyện (tài khoản tác giả)</label
+        >
+        <button class="btn block">Đăng ký</button>
+        <p class="msg" id="msg" hidden role="alert"></p>
+        <p style="text-align: center; margin-top: 14px; font-size: 0.9rem">
+          Đã có tài khoản?
+          <a href="login.html" style="color: var(--primary-dark); font-weight: 600">Đăng nhập</a>
+        </p>
+      </form>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      $("f").onsubmit = async (e) => {
+        e.preventDefault();
+        const b = $("f").querySelector("button");
+        b.disabled = true;
+        try {
+          const r = await API.signUp({
+            email: $("email").value.trim(),
+            password: $("pw").value,
+            displayName: $("name").value.trim(),
+            asAuthor: $("au").checked,
+          });
+          if (r.needsConfirm) {
+            showMsg($("msg"), "Đã gửi email xác nhận. Hãy mở email rồi đăng nhập.", true);
+            return;
+          }
+          goNext(ROOT + "index.html");
+        } catch (err) {
+          showMsg($("msg"), err.message);
+          b.disabled = false;
+        }
+      };
+    </script>
+  </body>
+</html>

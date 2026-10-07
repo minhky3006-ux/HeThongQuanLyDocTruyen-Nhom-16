@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Chi tiết truyện · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="stories" data-root="../../">
+    <main class="container">
+      <div id="box" class="card" style="margin-top: 20px">Đang tải...</div>
+      <h2>Danh sách chương</h2>
+      <div class="chapters card" id="chs"></div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      (async () => {
+        const id = +new URLSearchParams(location.search).get("id");
+        try {
+          const [s, chs, u] = await Promise.all([API.getStory(id), API.listChapters(id), API.currentUser()]);
+          document.title = s.title + " · TruyệnXanh";
+          let following = false,
+            resume = null;
+          if (u) {
+            [following, resume] = await Promise.all([API.isFollowing(id), API.getResume(id)]);
+          }
+          const startNum = resume?.chapters?.number || chs[0]?.number;
+          $("box").innerHTML =
+            `<div class="row" style="align-items:flex-start"><div style="width:130px">${coverHTML(s, true)}</div>
+      <div style="flex:1;min-width:200px"><h1>${esc(s.title)}</h1>
+      <p class="muted">${esc(s.author)} · ★ ${s.rating_avg} (${s.rating_count}) · ${fmt(s.view_count)} lượt đọc</p>
+      <p style="margin:8px 0">${s.genres.map((g) => `<span class="chip">${esc(g.name)}</span>`).join("")}</p><p>${esc(s.description)}</p>
+      <p class="row" style="margin-top:14px">${startNum ? `<a class="btn" href="reader.html?id=${id}&ch=${startNum}">${resume ? "Đọc tiếp chương " : "Đọc từ chương "}${startNum}</a>` : ""}
+      <button class="btn ghost" id="fol"></button></p></div></div>`;
+          const paint = () => {
+            $("fol").textContent = following ? "♥ Đang theo dõi" : "♡ Theo dõi";
+          };
+          paint();
+          $("fol").onclick = async () => {
+            if (!u) {
+              location.href =
+                "../auth/login.html?next=" + encodeURIComponent(location.pathname + location.search);
+              return;
+            }
+            try {
+              following = await API.toggleFollow(id);
+              paint();
+            } catch (e) {
+              alert(e.message);
+            }
+          };
+          $("chs").innerHTML =
+            chs
+              .map(
+                (c) =>
+                  `<a href="reader.html?id=${id}&ch=${c.number}">Chương ${c.number}${c.title ? ": " + esc(c.title) : ""}<span class="muted">›</span></a>`,
+              )
+              .join("") || emptyHTML("Truyện chưa có chương nào.");
+        } catch (e) {
+          showError($("box"), e);
+        }
+      })();
+    </script>
+  </body>
+</html>

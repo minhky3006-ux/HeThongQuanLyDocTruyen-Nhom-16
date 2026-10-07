@@ -1,0 +1,9 @@
+{
+  "name": "TruyệnXanh",
+  "short_name": "TruyệnXanh",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#F2F8F1",
+  "theme_color": "#46B07A",
+  "lang": "vi"
+}

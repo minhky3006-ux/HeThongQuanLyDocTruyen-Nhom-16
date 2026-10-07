@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="manifest.json" />
+    <title>Trang chủ · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="assets/css/style.css" />
+  </head>
+  <body data-page="home" data-root="">
+    <main class="container">
+      <section class="hero">
+        <h1>Đọc truyện nhẹ nhàng, mọi lúc mọi nơi</h1>
+        <p>Truyện mới được cập nhật mỗi tuần.</p>
+        <a class="btn" style="background: #fff; color: var(--primary-dark)" href="pages/stories/list.html"
+          >Khám phá truyện</a
+        >
+      </section>
+      <h2>Đang được đọc nhiều</h2>
+      <div class="grid" id="hot"></div>
+      <h2>Mới cập nhật</h2>
+      <div class="grid" id="fresh"></div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/layout.js"></script>
+    <script>
+      (async () => {
+        try {
+          const [h, f] = await Promise.all([
+            API.listStories({ sort: "hot" }),
+            API.listStories({ sort: "new" }),
+          ]);
+          $("hot").innerHTML =
+            h.items.slice(0, 10).map(cardHTML).join("") || emptyHTML("Chưa có truyện nào được đăng.");
+          $("fresh").innerHTML =
+            f.items.slice(0, 10).map(cardHTML).join("") || emptyHTML("Chưa có truyện nào được đăng.");
+        } catch (e) {
+          showError($("hot"), e);
+        }
+      })();
+    </script>
+  </body>
+</html>

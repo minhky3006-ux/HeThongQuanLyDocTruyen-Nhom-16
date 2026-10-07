@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Đọc truyện · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="stories" data-root="../../">
+    <main class="container">
+      <article class="reader" id="rd">
+        <h1 id="t"></h1>
+        <div id="body" style="margin-top: 16px">Đang tải...</div>
+        <div class="row" style="justify-content: space-between; margin: 28px 16px 0">
+          <a class="btn ghost" id="pv" hidden>‹ Chương trước</a><a class="btn" id="nx" hidden>Chương sau ›</a>
+        </div>
+      </article>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      (async () => {
+        const p = new URLSearchParams(location.search),
+          id = +p.get("id"),
+          num = +p.get("ch") || 1;
+        try {
+          const [s, c, chs] = await Promise.all([
+            API.getStory(id),
+            API.getChapter(id, num),
+            API.listChapters(id),
+          ]);
+          document.title = `${s.title} - Chương ${num}`;
+          $("t").innerHTML =
+            `<a href="detail.html?id=${id}" class="muted" style="font-size:.9rem">${esc(s.title)}</a><br>Chương ${num}${c.title ? ": " + esc(c.title) : ""}`;
+          if (s.kind === "comic") {
+            $("rd").classList.add("comic");
+            $("body").innerHTML =
+              c.chapter_pages
+                .map(
+                  (pg) =>
+                    `<img src="${esc(API.imgUrl(pg.image_key))}" width="${pg.width || 1080}" height="${pg.height || 1500}" loading="lazy" alt="Trang ${pg.page_no}">`,
+                )
+                .join("") || emptyHTML("Chương chưa có ảnh.");
+          } else {
+            $("body").innerHTML = paragraphs(c.content) || emptyHTML("Chương chưa có nội dung.");
+          }
+          const i = chs.findIndex((x) => x.number === num);
+          if (chs[i - 1]) {
+            $("pv").href = `reader.html?id=${id}&ch=${chs[i - 1].number}`;
+            $("pv").hidden = false;
+          }
+          if (chs[i + 1]) {
+            $("nx").href = `reader.html?id=${id}&ch=${chs[i + 1].number}`;
+            $("nx").hidden = false;
+          }
+          API.trackView(id, c.id);
+          API.saveHistory(id, c.id, 0).catch(() => {});
+        } catch (e) {
+          showError($("body"), e);
+        }
+      })();
+    </script>
+  </body>
+</html>

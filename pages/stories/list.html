@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Danh sách truyện · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="stories" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Danh sách truyện</h1>
+      <div class="row" style="margin: 14px 0">
+        <input
+          class="input"
+          id="q"
+          type="search"
+          placeholder="Tìm theo tên truyện hoặc tác giả"
+          style="flex: 1; min-width: 200px"
+        />
+        <select class="input" id="sort" style="width: auto">
+          <option value="new">Mới cập nhật</option>
+          <option value="hot">Đọc nhiều</option>
+          <option value="rating">Đánh giá cao</option>
+        </select>
+      </div>
+      <div id="genres" style="margin-bottom: 12px"></div>
+      <div class="grid" id="list"></div>
+      <p class="empty" id="none" hidden>Không tìm thấy truyện nào. Thử từ khóa hoặc thể loại khác nhé.</p>
+      <p style="text-align: center; margin: 20px 0">
+        <button class="btn ghost" id="more" hidden>Xem thêm</button>
+      </p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      let page = 0,
+        genre = null,
+        timer;
+      async function load(reset) {
+        if (reset) {
+          page = 0;
+          $("list").innerHTML = "";
+        }
+        try {
+          const r = await API.listStories({ q: $("q").value, genreId: genre, sort: $("sort").value, page });
+          $("list").insertAdjacentHTML("beforeend", r.items.map(cardHTML).join(""));
+          $("none").hidden = $("list").children.length > 0;
+          $("more").hidden = (page + 1) * API.PAGE >= r.total;
+        } catch (e) {
+          showError($("list"), e);
+        }
+      }
+      $("q").oninput = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => load(true), 300);
+      };
+      $("sort").onchange = () => load(true);
+      $("more").onclick = () => {
+        page++;
+        load(false);
+      };
+      API.listGenres()
+        .then((gs) => {
+          $("genres").innerHTML = gs
+            .map(
+              (g) =>
+                `<button class="chip" data-id="${g.id}" style="border:0;cursor:pointer">${esc(g.name)}</button>`,
+            )
+            .join("");
+          $("genres").onclick = (e) => {
+            const b = e.target.closest("button");
+            if (!b) return;
+            genre = genre == b.dataset.id ? null : +b.dataset.id;
+            [...$("genres").children].forEach(
+              (c) => (c.style.outline = c.dataset.id == genre ? "2px solid var(--primary)" : "none"),
+            );
+            load(true);
+          };
+        })
+        .catch(() => {});
+      load(true);
+    </script>
+  </body>
+</html>

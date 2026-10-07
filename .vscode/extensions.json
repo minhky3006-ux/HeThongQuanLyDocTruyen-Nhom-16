@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "ritwickdey.LiveServer",
+    "esbenp.prettier-vscode",
+    "editorconfig.editorconfig",
+    "eamodio.gitlens",
+    "MS-CEINTL.vscode-language-pack-vi",
+    "formulahendry.auto-rename-tag"
+  ]
+}
