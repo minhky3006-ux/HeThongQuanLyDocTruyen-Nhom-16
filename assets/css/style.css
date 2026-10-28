@@ -376,3 +376,128 @@ input[type="file"] {
     color: #f0dc9a;
   }
 }
+
+/* ===== Sprint 2: bình luận, đánh giá, tab, bảng quản trị, biểu đồ ===== */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0 12px;
+  flex-wrap: wrap;
+}
+.tabs button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 16px;
+}
+.tabs button.on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+.subnav {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 4px;
+  flex-wrap: wrap;
+}
+.subnav a {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.subnav a.on {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+.list-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.list-row:last-child {
+  border-bottom: 0;
+}
+.btn.sm {
+  padding: 5px 12px;
+  font-size: 0.85rem;
+}
+.btn.danger {
+  background: var(--danger);
+  color: #fff;
+}
+.rate-stars button {
+  font-size: 1.6rem;
+  line-height: 1;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--line);
+  padding: 0 2px;
+}
+.rate-stars button.on {
+  color: var(--star);
+}
+.comment {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.comment:last-child {
+  border-bottom: 0;
+}
+.comment b {
+  font-size: 0.9rem;
+}
+.comment p {
+  margin-top: 2px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 160px;
+  padding-top: 8px;
+}
+.bars div {
+  flex: 1;
+  min-width: 4px;
+  background: var(--primary);
+  border-radius: 3px 3px 0 0;
+}
+.bars-x {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.stat-grid .card b {
+  display: block;
+  font-size: 1.5rem;
+  color: var(--primary-dark);
+}
+.badge.warn {
+  background: #fdecea;
+  color: var(--danger);
+}

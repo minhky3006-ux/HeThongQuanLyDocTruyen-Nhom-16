@@ -14,15 +14,16 @@ truyen-xanh/
 │   ├── css/style.css       Màu, font, component dùng chung (sửa token ở :root)
 │   ├── js/api.js           MỌI truy vấn Supabase + upload ảnh R2 (API.xxx)
 │   ├── js/ui.js            Hàm dựng HTML dùng chung, esc() chống XSS
-│   ├── js/layout.js        Header + tab bar + nút đăng xuất
+│   ├── js/layout.js        Header + tab bar + nút đăng xuất (+ mục Quản trị cho admin)
+│   ├── js/admin.js         Kiểm tra quyền admin + menu con cho trang quản trị
 │   ├── js/config.example.js  Mẫu cấu hình (copy thành config.js, không commit)
 │   └── img/                Ảnh, icon
 ├── pages/
 │   ├── stories/            list, detail, reader
 │   ├── auth/               login, register
 │   ├── author/             dashboard (đăng truyện, quản lý chương)
-│   ├── member/             (Sprint 2) yêu thích, lịch sử, bình luận
-│   └── admin/              (Sprint 2) người dùng, duyệt truyện, thể loại
+│   ├── member/             library (theo dõi, lịch sử đọc, đăng xuất)
+│   └── admin/              users, stories, genres, comments
 ├── db/                     Schema PostgreSQL, seed, dev.sql, hướng dẫn Supabase + R2
 ├── supabase/functions/     Hàm cấp link upload ảnh lên R2
 ├── templates/page.html     File mẫu để copy khi làm trang mới
@@ -37,6 +38,15 @@ truyen-xanh/
 | Lê Quốc Thắng | 1, 2, 5, 6 | index, stories/list, auth/register, auth/login |
 | Phạm Thanh Bình | 3, 4, 7 | stories/detail, stories/list (tìm kiếm), stories/reader |
 | Đỗ Minh Kỳ | 12, 13 | author/dashboard (+ trang đăng truyện, quản lý chương) |
+
+## Phân công Sprint 2 (tuần 3–4, 22 điểm)
+| Người | Story | File |
+|---|---|---|
+| Lê Quốc Thắng | 11 | member/library (nút Đăng xuất), layout.js |
+| Phạm Thanh Bình | 8, 9, 10 | stories/detail (theo dõi, đánh giá, bình luận), member/library, stories/reader (lưu lịch sử) |
+| Đỗ Minh Kỳ | 14, 15, 16, 17, 18 | author/stats, admin/users, admin/stories, admin/genres, admin/comments |
+
+Đây là khung đã nối sẵn với `API.xxx()`; chưa kiểm thử với dữ liệu thật. Quyền admin: chạy lệnh 1 trong `db/dev.sql` để tài khoản của bạn thành admin.
 
 ## Quy trình Git
 - `main`: bản ổn định, chỉ merge từ `develop` cuối sprint

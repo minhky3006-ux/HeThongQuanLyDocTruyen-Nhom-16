@@ -65,13 +65,13 @@
           const me = await API.getProfile();
           if (me.role === "member") {
             $("gate").innerHTML =
-              `<div class="card empty">Tài khoản của bạn chưa phải tác giả.<br><br><button class="btn" id="be">Trở thành tác giả</button></div>`;
+              `<div class="card empty">Tài khoản của bạn chưa phải tác giả.<br><br><button class="btn" id="be">Trở thành tác giả</button><p class="msg" id="bm" hidden role="alert"></p></div>`;
             $("be").onclick = async () => {
               try {
                 await API.becomeAuthor();
                 location.reload();
               } catch (e) {
-                alert(e.message);
+                showMsg($("bm"), e.message);
               }
             };
             return;
@@ -90,11 +90,24 @@
               list
                 .map(
                   (s) =>
-                    `<div class="mine-row"><div><strong>${esc(s.title)}</strong> <span class="badge">${STATUS_VI[s.status]}</span><br><span class="muted" style="font-size:.85rem">${s.chapter_count} chương · ${fmt(s.view_count)} lượt đọc</span></div><a class="btn ghost" href="chapters.html?id=${s.id}">Quản lý chương</a></div>`,
+                    `<div class="mine-row"><div><strong>${esc(s.title)}</strong> <span class="badge">${STATUS_VI[s.status]}</span><br><span class="muted" style="font-size:.85rem">${s.chapter_count} chương · ${fmt(s.view_count)} lượt đọc</span></div><span class="row"><label class="btn ghost" style="cursor:pointer">${s.cover_key ? "Đổi bìa" : "Thêm bìa"}<input type="file" accept="image/*" hidden data-cover="${s.id}"></label><a class="btn ghost" href="edit.html?id=${s.id}">Sửa thông tin</a><a class="btn ghost" href="chapters.html?id=${s.id}">Quản lý chương</a><a class="btn ghost" href="stats.html?id=${s.id}">Thống kê</a></span></div>`,
                 )
                 .join("") || emptyHTML("Bạn chưa đăng truyện nào.");
           }
           loadMine();
+          // Tải lại/đổi ảnh bìa cho truyện đã đăng (trước đây bìa lỗi thì không có cách thử lại)
+          $("mine").onchange = async (e) => {
+            const inp = e.target.closest("input[data-cover]");
+            if (!inp || !inp.files[0]) return;
+            showMsg($("nm"), "Đang tải ảnh bìa...", true);
+            try {
+              await API.uploadCover(+inp.dataset.cover, inp.files[0]);
+              showMsg($("nm"), "Đã cập nhật ảnh bìa.", true);
+              loadMine();
+            } catch (err) {
+              showMsg($("nm"), "Tải ảnh bìa lỗi: " + err.message);
+            }
+          };
           $("nf").onsubmit = async (e) => {
             e.preventDefault();
             const b = $("nf").querySelector("button");

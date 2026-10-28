@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Quản lý người dùng · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="admin" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Quản lý người dùng</h1>
+      <div id="gate"></div>
+      <div class="card" id="list" style="margin-top: 12px" hidden></div>
+      <div class="row" id="pg" style="justify-content: center; margin-top: 12px" hidden>
+        <button class="btn ghost sm" id="prev">‹ Trước</button><span id="pn" class="muted"></span
+        ><button class="btn ghost sm" id="next">Sau ›</button>
+      </div>
+      <p class="msg" id="m" hidden role="alert"></p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script src="../../assets/js/admin.js"></script>
+    <script>
+      const ROLE_VI = { member: "Thành viên", author: "Tác giả", admin: "Quản trị viên" };
+      let page = 0;
+      (async () => {
+        if (!(await requireAdmin("users"))) return;
+        const me = await API.currentUser();
+        $("list").hidden = false;
+        async function load() {
+          try {
+            const us = await API.listUsers(page);
+            $("list").innerHTML =
+              us
+                .map(
+                  (u) =>
+                    `<div class="list-row"><div><strong>${esc(u.display_name)}</strong> <span class="badge">${ROLE_VI[u.role]}</span>${u.is_locked ? ' <span class="badge warn">Đã khóa</span>' : ""}<br><span class="muted" style="font-size:.85rem">Tham gia ${fmtDate(u.created_at)}</span></div>${
+                      u.role === "admin" || u.id === me.id
+                        ? ""
+                        : `<button class="btn sm ${u.is_locked ? "ghost" : "danger"}" data-id="${u.id}" data-lock="${u.is_locked ? 0 : 1}">${u.is_locked ? "Mở khóa" : "Khóa tài khoản"}</button>`
+                    }</div>`,
+                )
+                .join("") || emptyHTML("Không có người dùng.");
+            $("pn").textContent = "Trang " + (page + 1);
+            $("prev").disabled = page === 0;
+            $("next").disabled = us.length < API.PAGE;
+            $("pg").hidden = false;
+          } catch (e) {
+            showError($("list"), e);
+          }
+        }
+        $("list").onclick = async (e) => {
+          const b = e.target.closest("button[data-id]");
+          if (!b) return;
+          const lock = b.dataset.lock === "1";
+          if (lock && !confirm("Khóa tài khoản này? Họ sẽ không đăng truyện, bình luận, đánh giá được.")) return;
+          b.disabled = true;
+          try {
+            await API.setUserLocked(b.dataset.id, lock);
+            load();
+          } catch (err) {
+            showMsg($("m"), err.message);
+            b.disabled = false;
+          }
+        };
+        $("prev").onclick = () => {
+          page--;
+          load();
+        };
+        $("next").onclick = () => {
+          page++;
+          load();
+        };
+        load();
+      })();
+    </script>
+  </body>
+</html>

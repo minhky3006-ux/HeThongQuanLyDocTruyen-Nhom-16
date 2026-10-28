@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Quản lý thể loại · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="admin" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Quản lý thể loại truyện</h1>
+      <div id="gate"></div>
+      <form class="card row" id="gf" style="margin-top: 12px" hidden>
+        <input id="gn" class="input" style="flex: 1; min-width: 180px" placeholder="Tên thể loại mới" required maxlength="40" />
+        <button class="btn">Thêm</button>
+      </form>
+      <p class="msg" id="m" hidden role="alert"></p>
+      <div class="card" id="list" style="margin-top: 12px" hidden></div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script src="../../assets/js/admin.js"></script>
+    <script>
+      // "Tiên Hiệp" -> "tien-hiep" (bỏ dấu tiếng Việt để làm slug)
+      const slugify = (s) =>
+        s
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/đ/g, "d")
+          .replace(/Đ/g, "D")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      (async () => {
+        if (!(await requireAdmin("genres"))) return;
+        $("gf").hidden = false;
+        $("list").hidden = false;
+        async function load() {
+          try {
+            const gs = await API.listGenres();
+            $("list").innerHTML =
+              gs
+                .map(
+                  (g) =>
+                    `<div class="list-row"><strong>${esc(g.name)}</strong><button class="btn sm danger" data-id="${g.id}" data-name="${esc(g.name)}">Xóa</button></div>`,
+                )
+                .join("") || emptyHTML("Chưa có thể loại nào.");
+          } catch (e) {
+            showError($("list"), e);
+          }
+        }
+        $("gf").onsubmit = async (e) => {
+          e.preventDefault();
+          const name = $("gn").value.trim(),
+            slug = slugify(name);
+          if (!slug) return showMsg($("m"), "Tên thể loại không hợp lệ.");
+          try {
+            await API.addGenre(name, slug);
+            $("gf").reset();
+            $("m").hidden = true;
+            load();
+          } catch (err) {
+            showMsg($("m"), err.message);
+          }
+        };
+        $("list").onclick = async (e) => {
+          const b = e.target.closest("button[data-id]");
+          if (!b) return;
+          if (!confirm(`Xóa thể loại "${b.dataset.name}"? Truyện đang gắn thể loại này sẽ mất nhãn đó.`)) return;
+          try {
+            await API.deleteGenre(+b.dataset.id);
+            load();
+          } catch (err) {
+            showMsg($("m"), err.message);
+          }
+        };
+        load();
+      })();
+    </script>
+  </body>
+</html>

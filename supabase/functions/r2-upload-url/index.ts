@@ -3,8 +3,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AwsClient } from "https://esm.sh/aws4fetch@1.0.20";
 
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+
+const MAX_BYTES = 3 * 1024 * 1024; // web đã nén WebP (trang ≤1080px, thường <500 KB); 3 MB là trần dư dả
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -13,32 +19,54 @@ Deno.serve(async (req) => {
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });
-    const { data: { user } } = await sb.auth.getUser();
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
     if (!user) return json({ error: "Chưa đăng nhập" }, 401);
 
-    const { key, contentType } = await req.json();
+    let body: { key?: unknown; contentType?: unknown; size?: unknown };
+    try {
+      body = await req.json();
+    } catch (_) {
+      return json({ error: "Yêu cầu không hợp lệ" }, 400);
+    }
+    const { key, contentType, size } = body;
+    if (typeof key !== "string" || key.length > 200)
+      return json({ error: "Đường dẫn ảnh không hợp lệ" }, 400);
     if (contentType !== "image/webp") return json({ error: "Chỉ nhận ảnh WebP" }, 400);
+    if (typeof size !== "number" || !(size > 0) || size > MAX_BYTES)
+      return json({ error: "Ảnh quá lớn (tối đa 3 MB)" }, 413);
     const { data: me } = await sb.from("profiles").select("is_locked").eq("id", user.id).single();
     if (!me || me.is_locked) return json({ error: "Tài khoản bị khóa" }, 403);
 
     // Chỉ cho ghi vào đúng vị trí của mình
     const m = /^covers\/(\d+)(_s)?\.webp$/.exec(key) ?? /^s(\d+)\/c\d+\/\d{3,4}\.webp$/.exec(key);
     if (m) {
-      const { data } = await sb.from("stories").select("id").eq("id", m[1]).eq("author_id", user.id).maybeSingle();
+      const { data } = await sb
+        .from("stories")
+        .select("id")
+        .eq("id", m[1])
+        .eq("author_id", user.id)
+        .maybeSingle();
       if (!data) return json({ error: "Đây không phải truyện của bạn" }, 403);
     } else if (key !== `avatars/${user.id}.webp`) {
       return json({ error: "Đường dẫn ảnh không hợp lệ" }, 400);
     }
 
     const aws = new AwsClient({
-      accessKeyId: Deno.env.get("R2_ACCESS_KEY_ID")!, secretAccessKey: Deno.env.get("R2_SECRET_ACCESS_KEY")!,
-      service: "s3", region: "auto",
+      accessKeyId: Deno.env.get("R2_ACCESS_KEY_ID")!,
+      secretAccessKey: Deno.env.get("R2_SECRET_ACCESS_KEY")!,
+      service: "s3",
+      region: "auto",
     });
-    const url = new URL(`https://${Deno.env.get("R2_ACCOUNT_ID")}.r2.cloudflarestorage.com/${Deno.env.get("R2_BUCKET")}/${key}`);
+    const url = new URL(
+      `https://${Deno.env.get("R2_ACCOUNT_ID")}.r2.cloudflarestorage.com/${Deno.env.get("R2_BUCKET")}/${key}`,
+    );
     url.searchParams.set("X-Amz-Expires", "300");
     const signed = await aws.sign(new Request(url, { method: "PUT" }), { aws: { signQuery: true } });
     return json({ url: signed.url });
   } catch (e) {
-    return json({ error: String(e) }, 500);
+    console.error(e); // chi tiết chỉ xem trong log của Supabase, không trả về cho người dùng
+    return json({ error: "Lỗi máy chủ, vui lòng thử lại sau" }, 500);
   }
 });

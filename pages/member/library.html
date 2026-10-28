@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Tủ truyện · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="library" data-root="../../">
+    <main class="container">
+      <div class="row" style="justify-content: space-between; margin-top: 20px">
+        <h1 id="hi">Tủ truyện</h1>
+        <button class="btn ghost sm" id="out" hidden>Đăng xuất</button>
+      </div>
+      <div id="gate"></div>
+      <div class="tabs" id="tabs" hidden>
+        <button data-t="fol" class="on">♥ Đang theo dõi</button><button data-t="his">🕘 Lịch sử đọc</button>
+      </div>
+      <div id="box"></div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      const histHTML = (h) =>
+        `<a class="list-row" href="../stories/reader.html?id=${h.story_id}&ch=${h.chapters?.number || 1}"><span><strong>${esc(h.stories?.title)}</strong><br><span class="muted" style="font-size:.85rem">Đọc đến chương ${h.chapters?.number || 1} · ${fmtDate(h.updated_at)}</span></span><span class="btn sm">Đọc tiếp ›</span></a>`;
+      const fmtDate = (d) => new Date(d).toLocaleDateString("vi-VN");
+      async function show(t) {
+        $("box").innerHTML = '<p class="empty">Đang tải...</p>';
+        try {
+          if (t === "fol") {
+            const f = await API.myFollows();
+            $("box").innerHTML = f.length
+              ? `<div class="grid">${f.map((x) => cardHTML(withAuthor(x.stories))).join("")}</div>`
+              : emptyHTML("Bạn chưa theo dõi truyện nào.");
+          } else {
+            const h = await API.getHistory(30);
+            $("box").innerHTML = h.length
+              ? `<div class="card">${h.map(histHTML).join("")}</div>`
+              : emptyHTML("Bạn chưa đọc truyện nào.");
+          }
+        } catch (e) {
+          showError($("box"), e);
+        }
+      }
+      const withAuthor = (s) => ({ ...s, author: s.profiles?.display_name || "Ẩn danh" });
+      (async () => {
+        try {
+          const u = await API.currentUser();
+          if (!u) {
+            $("gate").innerHTML =
+              `<div class="card empty">Bạn cần <a href="../auth/login.html?next=${encodeURIComponent(location.pathname)}" style="color:var(--primary-dark);font-weight:600">đăng nhập</a> để xem truyện đã theo dõi và lịch sử đọc.</div>`;
+            return;
+          }
+          const me = await API.getProfile();
+          $("hi").textContent = "Tủ truyện của " + me.display_name;
+          $("out").hidden = false;
+          $("out").onclick = async () => {
+            await API.signOut();
+            location.href = "../../index.html";
+          };
+          $("tabs").hidden = false;
+          $("tabs").onclick = (e) => {
+            const b = e.target.closest("button[data-t]");
+            if (!b) return;
+            document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
+            show(b.dataset.t);
+          };
+          show("fol");
+        } catch (e) {
+          showError($("gate"), e);
+        }
+      })();
+    </script>
+  </body>
+</html>

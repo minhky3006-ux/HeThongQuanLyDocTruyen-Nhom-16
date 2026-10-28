@@ -2,6 +2,7 @@
 const NAV = [
   ["home", "index.html", "🏠", "Trang chủ"],
   ["stories", "pages/stories/list.html", "📚", "Truyện"],
+  ["library", "pages/member/library.html", "📖", "Tủ truyện"],
   ["author", "pages/author/dashboard.html", "✍️", "Tác giả"],
   ["login", "pages/auth/login.html", "👤", "Tài khoản"],
 ];
@@ -9,7 +10,7 @@ const cur = document.body.dataset.page;
 const links = (c) =>
   NAV.map(
     ([k, h, i, t]) =>
-      `<a href="${ROOT}${h}" class="${k === cur ? "on" : ""}">${c ? `<span>${i}</span>` : ""}${t}</a>`,
+      `<a data-nav="${k}" href="${ROOT}${h}" class="${k === cur ? "on" : ""}">${c ? `<span>${i}</span>` : ""}${t}</a>`,
   ).join("");
 document.body.insertAdjacentHTML(
   "afterbegin",
@@ -26,13 +27,30 @@ if (!API.configured)
 API.currentUser()
   .then((u) => {
     if (!u) return;
-    const b = document.createElement("button");
-    b.className = "btn ghost logout";
-    b.textContent = "Đăng xuất";
-    b.onclick = async () => {
-      await API.signOut();
-      location.href = ROOT + "index.html";
-    };
-    document.querySelector(".topbar .container").appendChild(b);
+    // Quản trị viên: thêm mục "Quản trị" vào menu (Sprint 2: story 15–18)
+    API.getProfile()
+      .then((me) => {
+        if (me.role !== "admin") return;
+        const add = (box, withIcon) =>
+          box &&
+          box.insertAdjacentHTML(
+            "beforeend",
+            `<a data-nav="admin" href="${ROOT}pages/admin/users.html" class="${cur === "admin" ? "on" : ""}">${withIcon ? "<span>🛡️</span>" : ""}Quản trị</a>`,
+          );
+        add(document.querySelector(".nav-links"), false);
+        add(document.querySelector(".tabbar"), true);
+      })
+      .catch(() => {});
+    // Đã đăng nhập: mục "Tài khoản" đổi thành "Đăng xuất" (cả menu desktop lẫn tab bar mobile)
+    document.querySelectorAll('a[data-nav="login"]').forEach((a) => {
+      a.lastChild.textContent = "Đăng xuất";
+      a.classList.remove("on");
+      a.href = "#";
+      a.onclick = async (e) => {
+        e.preventDefault();
+        await API.signOut();
+        location.href = ROOT + "index.html";
+      };
+    });
   })
   .catch(() => {});

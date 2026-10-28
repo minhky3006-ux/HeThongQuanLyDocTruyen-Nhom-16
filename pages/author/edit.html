@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Sửa thông tin truyện · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="author" data-root="../../">
+    <main class="container">
+      <p style="margin-top: 16px"><a href="dashboard.html" class="muted">‹ Truyện của tôi</a></p>
+      <h1 style="margin-top: 6px">Sửa thông tin truyện</h1>
+      <div id="gate" style="margin-top: 14px"></div>
+      <form class="card" id="ef" hidden>
+        <div class="field">
+          <label for="title">Tên truyện</label><input id="title" class="input" required maxlength="120" />
+        </div>
+        <div class="field">
+          <label for="desc">Giới thiệu</label
+          ><textarea id="desc" class="input" rows="4" maxlength="2000"></textarea>
+        </div>
+        <div class="field">
+          <label>Thể loại</label>
+          <div id="gl"></div>
+        </div>
+        <button class="btn">Lưu thay đổi</button>
+        <p class="msg" id="em" hidden role="alert"></p>
+      </form>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      (async () => {
+        const id = +new URLSearchParams(location.search).get("id");
+        try {
+          const u = await API.currentUser();
+          if (!u) {
+            $("gate").innerHTML =
+              `<div class="card empty">Bạn cần <a href="../auth/login.html?next=${encodeURIComponent(location.pathname + location.search)}" style="color:var(--primary-dark);font-weight:600">đăng nhập</a>.</div>`;
+            return;
+          }
+          const [s, gs, me] = await Promise.all([API.getStory(id), API.listGenres(), API.getProfile()]);
+          if (s.author_id !== u.id && me.role !== "admin") {
+            $("gate").innerHTML = emptyHTML("Đây không phải truyện của bạn.");
+            return;
+          }
+          const have = new Set(s.genres.map((g) => g.id));
+          $("title").value = s.title;
+          $("desc").value = s.description || "";
+          $("gl").innerHTML =
+            gs
+              .map(
+                (g) =>
+                  `<label class="chip"><input type="checkbox" value="${g.id}" ${have.has(g.id) ? "checked" : ""}> ${esc(g.name)}</label>`,
+              )
+              .join("") || emptyHTML("Chưa có thể loại nào. Quản trị viên cần thêm ở trang Thể loại.");
+          $("ef").hidden = false;
+          $("ef").onsubmit = async (e) => {
+            e.preventDefault();
+            const b = $("ef").querySelector("button");
+            b.disabled = true;
+            $("em").hidden = true;
+            try {
+              await API.updateStory(id, { title: $("title").value.trim(), description: $("desc").value.trim() });
+              await API.setStoryGenres(
+                id,
+                [...document.querySelectorAll("#gl input:checked")].map((i) => +i.value),
+              );
+              showMsg($("em"), "Đã lưu thay đổi.", true);
+            } catch (err) {
+              showMsg($("em"), err.message);
+            } finally {
+              b.disabled = false;
+            }
+          };
+        } catch (e) {
+          showError($("gate"), e);
+        }
+      })();
+    </script>
+  </body>
+</html>

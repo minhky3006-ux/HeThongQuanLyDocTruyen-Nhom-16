@@ -116,8 +116,10 @@ $$ select exists(select 1 from stories where id=sid and author_id=auth.uid()) $$
 -- Tạo profile tự động khi đăng ký (story 5)
 create function handle_new_user() returns trigger language plpgsql security definer set search_path=public as $$
 begin
-  insert into profiles(id, display_name)
-  values (new.id, coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email,'@',1)));
+  insert into profiles(id, display_name, role)
+  values (new.id,
+          coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email,'@',1)),
+          case when new.raw_user_meta_data->>'want_author' = 'true' then 'author'::user_role else 'member'::user_role end);
   return new;
 end $$;
 create trigger on_auth_user_created after insert on auth.users for each row execute function handle_new_user();
@@ -129,10 +131,31 @@ $$ update profiles set role='author' where id=auth.uid() and role='member' and n
 create function admin_set_locked(uid uuid, locked boolean) returns void language plpgsql security definer set search_path=public as
 $$ begin if not is_admin() then raise exception 'forbidden'; end if; update profiles set is_locked=locked where id=uid; end $$;
 -- Ghi lượt xem (gọi khi mở chương)
+-- Chống bơm lượt đọc: 1 lượt/người/chương/giờ
+create table view_dedupe (
+  story_id bigint not null,
+  chapter_id bigint not null default 0,
+  viewer text not null,
+  bucket timestamptz not null,
+  primary key (story_id, chapter_id, viewer, bucket)
+);
+alter table view_dedupe enable row level security;          -- không có policy: chỉ hàm security definer ghi được
+revoke all on view_dedupe from anon, authenticated;
 create function track_view(p_story bigint, p_chapter bigint default null) returns void language plpgsql security definer set search_path=public as $$
+declare hdr json; who text; n int;
 begin
-  update stories set view_count=view_count+1 where id=p_story and status='published';
+  perform 1 from stories where id=p_story and status='published';
   if not found then return; end if;
+  begin hdr := nullif(current_setting('request.headers', true), '')::json; exception when others then hdr := null; end;
+  who := coalesce(auth.uid()::text,
+                  nullif(trim(split_part(coalesce(hdr->>'cf-connecting-ip', hdr->>'x-forwarded-for', ''), ',', 1)), ''),
+                  'unknown');
+  insert into view_dedupe(story_id, chapter_id, viewer, bucket)
+  values (p_story, coalesce(p_chapter, 0), who, date_trunc('hour', now())) on conflict do nothing;
+  get diagnostics n = row_count;
+  if n = 0 then return; end if;
+  if random() < 0.01 then delete from view_dedupe where bucket < now() - interval '2 days'; end if;
+  update stories set view_count=view_count+1 where id=p_story;
   if p_chapter is not null then update chapters set view_count=view_count+1 where id=p_chapter and story_id=p_story; end if;
   insert into story_views_daily(story_id,day,views) values (p_story,current_date,1)
   on conflict (story_id,day) do update set views=story_views_daily.views+1;
@@ -146,6 +169,16 @@ begin
   return null;
 end $$;
 create trigger chapters_count after insert or delete on chapters for each row execute function trg_chapter_count();
+-- Số chương do DB gán khi client không gửi number (tránh trùng khi thêm cùng lúc)
+create function trg_chapter_number() returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if new.number is null then
+    perform pg_advisory_xact_lock(new.story_id);
+    new.number := coalesce((select max(number) from chapters where story_id = new.story_id), 0) + 1;
+  end if;
+  return new;
+end $$;
+create trigger chapters_number before insert on chapters for each row execute function trg_chapter_number();
 create function trg_follow_count() returns trigger language plpgsql security definer set search_path=public as $$
 begin
   update stories set follow_count=follow_count+(case when tg_op='INSERT' then 1 else -1 end)
@@ -161,6 +194,19 @@ begin
   return null;
 end $$;
 create trigger ratings_calc after insert or update or delete on ratings for each row execute function trg_rating();
+
+-- Tác giả chỉ được đưa truyện về draft/pending; published/removed là việc của admin (story 16)
+create function trg_story_status_guard() returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  -- auth.uid() null = chạy từ SQL Editor/service role (vd db/dev.sql) → cho phép
+  if new.status is distinct from old.status and auth.uid() is not null and not is_admin() then
+    if old.status = 'removed' or new.status not in ('draft','pending') then
+      raise exception 'row-level security: chỉ quản trị viên được duyệt/gỡ truyện';
+    end if;
+  end if;
+  return new;
+end $$;
+create trigger stories_status_guard before update on stories for each row execute function trg_story_status_guard();
 
 -- ========== QUYỀN CỘT (chặn tự sửa role, bộ đếm...) ==========
 revoke update on profiles, stories, comments from anon, authenticated;
@@ -183,7 +229,7 @@ create policy genres_admin    on genres for all using (is_admin()) with check (i
 
 create policy stories_read    on stories for select using (status='published' or author_id=auth.uid() or is_admin());
 create policy stories_insert  on stories for insert with check (author_id=auth.uid() and is_author() and status in ('draft','pending'));
-create policy stories_update  on stories for update using (author_id=auth.uid()) with check (author_id=auth.uid() and status in ('draft','pending'));
+create policy stories_update  on stories for update using (author_id=auth.uid()) with check (author_id=auth.uid());  -- đổi trạng thái do trigger stories_status_guard kiểm soát
 create policy stories_admin   on stories for update using (is_admin()) with check (is_admin());
 create policy stories_delete  on stories for delete using (author_id=auth.uid() or is_admin());
 

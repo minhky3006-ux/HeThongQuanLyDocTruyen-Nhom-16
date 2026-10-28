@@ -5,7 +5,8 @@
       ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY)
       : null;
   const PAGE = 20;
-  const CARD = "id,title,cover_key,rating_avg,view_count,chapter_count,rating_count,profiles!author_id(display_name)";
+  const CARD =
+    "id,title,cover_key,rating_avg,view_count,chapter_count,rating_count,profiles!author_id(display_name)";
   const MSG = {
     "Invalid login credentials": "Sai email hoặc mật khẩu.",
     "User already registered": "Email này đã được đăng ký.",
@@ -13,6 +14,8 @@
     "JSON object requested": "Không tìm thấy dữ liệu.",
     "row-level security": "Bạn không có quyền thực hiện thao tác này.",
     "Email not confirmed": "Hãy xác nhận email trước khi đăng nhập.",
+    "duplicate key": "Dữ liệu bị trùng, hãy thử lại.",
+    "Failed to fetch": "Không kết nối được máy chủ, kiểm tra mạng rồi thử lại.",
   };
   const vi = (m) => {
     for (const k in MSG) if (m && m.includes(k)) return MSG[k];
@@ -52,10 +55,10 @@
     const { data, error } = await db().auth.signUp({
       email,
       password,
-      options: { data: { display_name: displayName } },
+      // want_author: trigger handle_new_user gán role tác giả ngay khi tạo profile (không mất khi bật Confirm email)
+      options: { data: { display_name: displayName, want_author: asAuthor ? "true" : "false" } },
     });
     if (error) throw new Error(vi(error.message));
-    if (data.session && asAuthor) await becomeAuthor();
     return { needsConfirm: !data.session };
   }
   async function signIn(email, password) {
@@ -168,18 +171,16 @@
   async function saveHistory(storyId, chapterId, pageNo = 0) {
     const u = await currentUser();
     if (!u) return;
-    await db()
-      .from("reading_history")
-      .upsert(
-        {
-          user_id: u.id,
-          story_id: storyId,
-          chapter_id: chapterId,
-          page_no: pageNo,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,story_id" },
-      );
+    await db().from("reading_history").upsert(
+      {
+        user_id: u.id,
+        story_id: storyId,
+        chapter_id: chapterId,
+        page_no: pageNo,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,story_id" },
+    );
   }
   async function getResume(storyId) {
     const u = await currentUser();
@@ -208,6 +209,7 @@
         .from("comments")
         .select("id,body,created_at,user_id,profiles!user_id(display_name)")
         .eq("story_id", storyId)
+        .eq("is_hidden", false)
         .order("created_at", { ascending: false })
         .range(page * PAGE, page * PAGE + PAGE - 1),
     );
@@ -252,6 +254,16 @@
   }
   const updateStory = (id, patch) =>
     run(db().from("stories").update({ title: patch.title, description: patch.description }).eq("id", id));
+  /* Đổi thể loại của truyện đã đăng: chỉ xóa thể loại bị bỏ tick, chỉ thêm thể loại mới tick (RLS sg_write: chủ truyện hoặc admin) */
+  async function setStoryGenres(storyId, genreIds = []) {
+    const want = new Set(genreIds.map(Number));
+    const cur = (await rows(db().from("story_genres").select("genre_id").eq("story_id", storyId))).map((r) => r.genre_id);
+    const drop = cur.filter((g) => !want.has(g));
+    const add = [...want].filter((g) => !cur.includes(g));
+    if (drop.length) await run(db().from("story_genres").delete().eq("story_id", storyId).in("genre_id", drop));
+    if (add.length)
+      await run(db().from("story_genres").insert(add.map((g) => ({ story_id: storyId, genre_id: g }))));
+  }
   const myStories = async () =>
     rows(
       db()
@@ -260,23 +272,9 @@
         .eq("author_id", await uid())
         .order("updated_at", { ascending: false }),
     );
-  async function addChapter(storyId, { title, content = null }) {
-    const last = await rows(
-      db()
-        .from("chapters")
-        .select("number")
-        .eq("story_id", storyId)
-        .order("number", { ascending: false })
-        .limit(1),
-    );
-    return rows(
-      db()
-        .from("chapters")
-        .insert({ story_id: storyId, number: (last[0]?.number || 0) + 1, title, content })
-        .select()
-        .single(),
-    );
-  }
+  // Số chương do DB tự gán (trigger chapters_number) nên thêm cùng lúc không bị trùng
+  const addChapter = (storyId, { title, content = null }) =>
+    rows(db().from("chapters").insert({ story_id: storyId, title, content }).select().single());
   const updateChapter = (id, { title, content }) =>
     run(db().from("chapters").update({ title, content }).eq("id", id));
   const deleteChapter = (id) => run(db().from("chapters").delete().eq("id", id));
@@ -315,6 +313,24 @@
         .eq("status", "pending")
         .order("created_at"),
     );
+  const adminStories = (status = "published", page = 0) =>
+    rows(
+      db()
+        .from("stories")
+        .select("id,title,status,view_count,chapter_count,created_at,profiles!author_id(display_name)")
+        .eq("status", status)
+        .order("updated_at", { ascending: false })
+        .range(page * PAGE, page * PAGE + PAGE - 1),
+    );
+  const adminComments = (hidden = false, page = 0) =>
+    rows(
+      db()
+        .from("comments")
+        .select("id,body,created_at,is_hidden,story_id,stories(title),profiles!user_id(display_name)")
+        .eq("is_hidden", hidden)
+        .order("created_at", { ascending: false })
+        .range(page * PAGE, page * PAGE + PAGE - 1),
+    );
   const setStoryStatus = (id, status) => run(db().from("stories").update({ status }).eq("id", id));
   const listUsers = (page = 0) =>
     rows(
@@ -348,7 +364,7 @@
   }
   async function uploadImage(blob, key) {
     const { data, error } = await db().functions.invoke("r2-upload-url", {
-      body: { key, contentType: "image/webp" },
+      body: { key, contentType: "image/webp", size: blob.size },
     });
     if (error || !data?.url) {
       let m = error?.message || "Không lấy được link upload.";
@@ -415,6 +431,7 @@
     myRating,
     createStory,
     updateStory,
+    setStoryGenres,
     myStories,
     addChapter,
     updateChapter,
@@ -422,6 +439,8 @@
     addComicChapter,
     storyStats,
     pendingStories,
+    adminStories,
+    adminComments,
     setStoryStatus,
     listUsers,
     setUserLocked,

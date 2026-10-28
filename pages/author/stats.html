@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Thống kê lượt đọc · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="author" data-root="../../">
+    <main class="container">
+      <p style="margin-top: 16px"><a href="dashboard.html" class="muted">‹ Truyện của tôi</a></p>
+      <h1 id="h" style="margin-top: 6px">Thống kê lượt đọc</h1>
+      <div id="gate"></div>
+      <div id="st" hidden>
+        <div class="tabs" id="tabs">
+          <button data-d="7">7 ngày</button><button data-d="30" class="on">30 ngày</button
+          ><button data-d="90">90 ngày</button>
+        </div>
+        <div class="stat-grid" id="sum"></div>
+        <h2>Lượt đọc theo ngày</h2>
+        <div class="card"><div class="bars" id="bars"></div><div class="bars-x" id="bx"></div></div>
+      </div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      const id = +new URLSearchParams(location.search).get("id");
+      // Trả về mảng đủ mọi ngày trong khoảng (ngày không có lượt = 0) để biểu đồ liên tục
+      function fill(rows, days) {
+        const m = Object.fromEntries(rows.map((r) => [r.day, r.views]));
+        return Array.from({ length: days }, (_, i) => {
+          const d = new Date(Date.now() - (days - 1 - i) * 864e5).toISOString().slice(0, 10);
+          return { day: d, views: m[d] || 0 };
+        });
+      }
+      async function draw(days) {
+        const data = fill(await API.storyStats(id, days), days),
+          total = data.reduce((a, r) => a + r.views, 0),
+          max = Math.max(1, ...data.map((r) => r.views)),
+          best = data.reduce((a, r) => (r.views > a.views ? r : a), data[0]);
+        $("sum").innerHTML =
+          `<div class="card"><b>${fmt(total)}</b><span class="muted">Tổng lượt đọc</span></div>` +
+          `<div class="card"><b>${(total / days).toFixed(1)}</b><span class="muted">Trung bình/ngày</span></div>` +
+          `<div class="card"><b>${best.views}</b><span class="muted">Cao nhất (${best.day.slice(5).split("-").reverse().join("/")})</span></div>`;
+        $("bars").innerHTML = data
+          .map(
+            (r) =>
+              `<div title="${r.day}: ${r.views} lượt" style="height:${Math.max(2, (r.views / max) * 100)}%"></div>`,
+          )
+          .join("");
+        const f = (d) => d.slice(5).split("-").reverse().join("/");
+        $("bx").innerHTML = `<span>${f(data[0].day)}</span><span>${f(data[data.length - 1].day)}</span>`;
+      }
+      (async () => {
+        try {
+          const u = await API.currentUser();
+          if (!u) {
+            $("gate").innerHTML =
+              `<div class="card empty">Bạn cần <a href="../auth/login.html?next=${encodeURIComponent(location.pathname + location.search)}" style="color:var(--primary-dark);font-weight:600">đăng nhập</a> để xem thống kê.</div>`;
+            return;
+          }
+          const s = await API.getStory(id);
+          if (s.author_id !== u.id) {
+            $("gate").innerHTML = emptyHTML("Bạn chỉ xem được thống kê truyện của mình.");
+            return;
+          }
+          $("h").textContent = "Thống kê: " + s.title;
+          $("st").hidden = false;
+          $("tabs").onclick = (e) => {
+            const b = e.target.closest("button[data-d]");
+            if (!b) return;
+            document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
+            draw(+b.dataset.d);
+          };
+          draw(30);
+        } catch (e) {
+          showError($("gate"), e);
+        }
+      })();
+    </script>
+  </body>
+</html>

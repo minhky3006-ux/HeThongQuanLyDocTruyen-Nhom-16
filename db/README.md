@@ -23,6 +23,7 @@ Web / App ──► Supabase (PostgreSQL + Auth + API tự sinh) ── chỉ l�
    npx supabase functions deploy r2-upload-url
    ```
 5. **Cấu hình web**: copy `assets/js/config.example.js` thành `assets/js/config.js`, điền `SUPABASE_URL`, `SUPABASE_ANON_KEY` (Project Settings > API) và `IMG_BASE` (domain R2, có dấu `/` ở cuối). File này không commit, mỗi thành viên tự tạo trên máy mình.
+   - **Đã có DB chạy bản `schema.sql` cũ?** Chạy thêm `db/migrations/001_sprint1_hardening.sql` (chạy lại nhiều lần vẫn an toàn). DB mới tạo từ `schema.sql` hiện tại không cần.
 6. **Chạy thử**: mở bằng Live Server, đăng ký tài khoản có tick "tác giả", đăng truyện, rồi chạy `db/dev.sql` (lệnh 1 và 2) để làm admin và duyệt truyện.
 
 ## Dùng dữ liệu trong code
@@ -36,9 +37,9 @@ Mọi truy vấn nằm trong `assets/js/api.js`, các trang chỉ gọi `API.tê
 | Trang truyện tranh | `s<story_id>/c<số chương>/<001>.webp` | rộng tối đa 1080 px, WebP chất lượng ~80 |
 | Avatar | `avatars/<user_id>.webp` | 128 px |
 
-- Nén và đổi sang WebP ngay trên trình duyệt trước khi upload (thư viện `browser-image-compression`), không upload ảnh gốc.
+- Nén và đổi sang WebP ngay trên trình duyệt (canvas có sẵn, hàm `API.compressImage`) trước khi upload, không upload ảnh gốc. Hàm cấp link từ chối ảnh khai báo trên 3 MB.
 - DB lưu `width`, `height` của từng trang nên có thể giữ chỗ trước, trang không bị giật khi ảnh tải về.
-- Thẻ ảnh dùng `loading="lazy"`; khi mở chương, tải trước 2 trang kế tiếp.
+- Thẻ ảnh dùng `loading="lazy"`. (Chưa làm: tải trước 2 trang kế tiếp.)
 - Ước tính (giả định mỗi trang ~150 KB): 10 GB chứa được khoảng 65.000 trang, tức hơn 2.000 chương 30 trang.
 
 ## Tốc độ truy vấn
@@ -53,7 +54,9 @@ Quy tắc nằm ngay trong DB nên web và app dùng chung, ai cũng không qua 
 - Thành viên chỉ sửa được dữ liệu của chính mình (theo dõi, lịch sử, bình luận, đánh giá). Không tự sửa `role`, `is_locked` hay bộ đếm.
 - Gọi `become_author()` để thành tác giả. Tác giả đăng truyện ở trạng thái `pending`, chỉ admin mới đổi sang `published` hoặc `removed` (story 16).
 - Admin khóa tài khoản bằng `admin_set_locked(uid, true)`; tài khoản bị khóa không đăng truyện, bình luận, đánh giá được.
-- Gọi `track_view(story_id, chapter_id)` khi mở chương để ghi lượt xem (story 14).
+- Gọi `track_view(story_id, chapter_id)` khi mở chương để ghi lượt xem (story 14). DB chỉ tính 1 lượt/người (user hoặc IP)/chương/giờ nên không bơm lượt đọc bằng cách gọi lặp được.
+- Tác giả sửa được tên/mô tả/bìa truyện đã duyệt, nhưng chỉ admin đổi được trạng thái sang `published`/`removed` (trigger `stories_status_guard`). Truyện bị gỡ không tự đặt lại thành chờ duyệt.
+- Số chương do DB gán (trigger `chapters_number`): thêm cùng lúc không bị trùng. Xóa chương giữa chừng để lại chỗ trống số (vd 1, 3, 4) vì khóa ảnh trên R2 gắn với số chương; trang đọc dùng thứ tự nên không lỗi.
 
 ## Lưu ý gói miễn phí
 - Project Supabase Free **tự tạm dừng sau 7 ngày không có truy cập**. Khi demo thì mở lại trước đó, hoặc đặt một lịch gọi API định kỳ.
@@ -62,6 +65,8 @@ Quy tắc nằm ngay trong DB nên web và app dùng chung, ai cũng không qua 
 - Vượt giới hạn băng thông của Supabase, dịch vụ có thể bị chặn đến kỳ sau. Ảnh đã đi qua R2 nên phần này chủ yếu là dữ liệu JSON, rất nhẹ.
 
 ## Giới hạn đã biết
+- Nội dung chương (`chapters.content`) hiện ai cũng đọc được qua API nếu truyện đã đăng. Khi làm chương trả phí (story 31–35) phải tách nội dung sang bảng riêng có policy kiểm tra quyền đọc, không chỉ ẩn ở giao diện.
+- Giới hạn dung lượng ở hàm cấp link dựa trên số khai báo của web, chưa phải giới hạn cứng phía R2. Nên đặt thêm quy tắc/cảnh báo dung lượng trên dashboard Cloudflare.
 - Xóa chương chỉ xóa dữ liệu trong DB, ảnh cũ vẫn còn trong R2 (tốn chỗ). Cần thêm hàm xóa ảnh ở Sprint sau.
 - Truyện tranh chưa hỗ trợ sửa ảnh của chương đã đăng: xóa chương rồi đăng lại.
 - Trình duyệt cần hỗ trợ xuất ảnh WebP (Chrome, Edge, Firefox, Android đều được; Safari cũ có thể không).

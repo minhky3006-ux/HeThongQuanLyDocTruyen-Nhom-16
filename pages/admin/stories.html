@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Duyệt / gỡ truyện · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="admin" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Duyệt / gỡ truyện</h1>
+      <div id="gate"></div>
+      <div class="tabs" id="tabs" hidden>
+        <button data-s="pending" class="on">Chờ duyệt</button><button data-s="published">Đang đăng</button
+        ><button data-s="removed">Đã gỡ</button>
+      </div>
+      <div class="card" id="list" hidden></div>
+      <p class="msg" id="m" hidden role="alert"></p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script src="../../assets/js/admin.js"></script>
+    <script>
+      let status = "pending";
+      // Nút hành động theo trạng thái hiện tại
+      const ACTIONS = {
+        pending: [["published", "Duyệt đăng", ""], ["removed", "Từ chối", "danger"]],
+        published: [["removed", "Gỡ vi phạm", "danger"]],
+        removed: [["published", "Khôi phục", "ghost"]],
+      };
+      (async () => {
+        if (!(await requireAdmin("stories"))) return;
+        $("tabs").hidden = false;
+        $("list").hidden = false;
+        async function load() {
+          $("list").innerHTML = "Đang tải...";
+          try {
+            const ss = await API.adminStories(status);
+            $("list").innerHTML =
+              ss
+                .map(
+                  (s) =>
+                    `<div class="list-row"><div><a href="../stories/detail.html?id=${s.id}"><strong>${esc(s.title)}</strong></a><br><span class="muted" style="font-size:.85rem">${esc(s.profiles?.display_name || "Ẩn danh")} · ${s.chapter_count} chương · ${fmt(s.view_count)} lượt đọc · ${fmtDate(s.created_at)}</span></div><span class="row">${ACTIONS[status]
+                      .map(([to, t, c]) => `<button class="btn sm ${c}" data-id="${s.id}" data-to="${to}">${t}</button>`)
+                      .join("")}</span></div>`,
+                )
+                .join("") || emptyHTML("Không có truyện nào.");
+          } catch (e) {
+            showError($("list"), e);
+          }
+        }
+        $("tabs").onclick = (e) => {
+          const b = e.target.closest("button[data-s]");
+          if (!b) return;
+          status = b.dataset.s;
+          document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
+          load();
+        };
+        $("list").onclick = async (e) => {
+          const b = e.target.closest("button[data-id]");
+          if (!b) return;
+          if (b.dataset.to === "removed" && !confirm("Gỡ truyện này khỏi trang web?")) return;
+          b.disabled = true;
+          try {
+            await API.setStoryStatus(+b.dataset.id, b.dataset.to);
+            load();
+          } catch (err) {
+            showMsg($("m"), err.message);
+            b.disabled = false;
+          }
+        };
+        load();
+      })();
+    </script>
+  </body>
+</html>

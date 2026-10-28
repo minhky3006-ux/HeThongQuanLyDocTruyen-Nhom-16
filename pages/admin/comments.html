@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <title>Kiểm duyệt bình luận · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="admin" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Kiểm duyệt bình luận</h1>
+      <div id="gate"></div>
+      <div class="tabs" id="tabs" hidden>
+        <button data-h="0" class="on">Đang hiển thị</button><button data-h="1">Đã ẩn</button>
+      </div>
+      <div class="card" id="list" hidden></div>
+      <div class="row" id="pg" style="justify-content: center; margin-top: 12px" hidden>
+        <button class="btn ghost sm" id="prev">‹ Trước</button><span id="pn" class="muted"></span
+        ><button class="btn ghost sm" id="next">Sau ›</button>
+      </div>
+      <p class="msg" id="m" hidden role="alert"></p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script src="../../assets/js/admin.js"></script>
+    <script>
+      let hidden = false,
+        page = 0;
+      (async () => {
+        if (!(await requireAdmin("comments"))) return;
+        $("tabs").hidden = false;
+        $("list").hidden = false;
+        async function load() {
+          $("list").innerHTML = "Đang tải...";
+          try {
+            const cs = await API.adminComments(hidden, page);
+            $("list").innerHTML =
+              cs
+                .map(
+                  (c) =>
+                    `<div class="list-row"><div style="flex:1;min-width:220px"><span class="muted" style="font-size:.85rem"><b>${esc(c.profiles?.display_name || "Ẩn danh")}</b> · <a href="../stories/detail.html?id=${c.story_id}">${esc(c.stories?.title || "")}</a> · ${fmtDate(c.created_at)}</span><p style="white-space:pre-wrap;word-break:break-word">${esc(c.body)}</p></div><span class="row"><button class="btn sm ghost" data-id="${c.id}" data-act="${hidden ? "show" : "hide"}">${hidden ? "Hiện lại" : "Ẩn"}</button><button class="btn sm danger" data-id="${c.id}" data-act="del">Xóa</button></span></div>`,
+                )
+                .join("") || emptyHTML("Không có bình luận.");
+            $("pn").textContent = "Trang " + (page + 1);
+            $("prev").disabled = page === 0;
+            $("next").disabled = cs.length < API.PAGE;
+            $("pg").hidden = false;
+          } catch (e) {
+            showError($("list"), e);
+          }
+        }
+        $("tabs").onclick = (e) => {
+          const b = e.target.closest("button[data-h]");
+          if (!b) return;
+          hidden = b.dataset.h === "1";
+          page = 0;
+          document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
+          load();
+        };
+        $("list").onclick = async (e) => {
+          const b = e.target.closest("button[data-id]");
+          if (!b) return;
+          const id = +b.dataset.id,
+            act = b.dataset.act;
+          if (act === "del" && !confirm("Xóa vĩnh viễn bình luận này?")) return;
+          b.disabled = true;
+          try {
+            if (act === "del") await API.deleteComment(id);
+            else await API.hideComment(id, act === "hide");
+            load();
+          } catch (err) {
+            showMsg($("m"), err.message);
+            b.disabled = false;
+          }
+        };
+        $("prev").onclick = () => {
+          page--;
+          load();
+        };
+        $("next").onclick = () => {
+          page++;
+          load();
+        };
+        load();
+      })();
+    </script>
+  </body>
+</html>
