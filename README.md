@@ -10,6 +10,8 @@ Làm theo `db/README.md` (mục Cài đặt) để nối Supabase + R2, rồi m�
 truyen-xanh/
 ├── index.html              Trang chủ
 ├── manifest.json           Cấu hình PWA (dùng như app)
+├── sw.js                   Service worker (cài được như app, mở khung khi mất mạng)
+├── mobile/                 Vỏ ứng dụng Android/iOS (Capacitor), xem mobile/README.md
 ├── assets/
 │   ├── css/style.css       Màu, font, component dùng chung (sửa token ở :root)
 │   ├── js/api.js           MỌI truy vấn Supabase + upload ảnh R2 (API.xxx)
@@ -22,10 +24,10 @@ truyen-xanh/
 │   ├── stories/            list, detail, reader
 │   ├── auth/               login, register
 │   ├── author/             dashboard (đăng truyện, quản lý chương)
-│   ├── member/             library (theo dõi, lịch sử đọc, đăng xuất)
-│   └── admin/              users, stories, genres, comments
+│   ├── member/             library (theo dõi, lịch sử đọc, đăng xuất), checkout, billing, mock-gateway (cổng giả lập))
+│   └── admin/              users, stories, genres, comments, access, plans, reports, orders, members, revenue, content
 ├── db/                     Schema PostgreSQL, seed, dev.sql, hướng dẫn Supabase + R2
-├── supabase/functions/     Hàm cấp link upload ảnh lên R2
+├── supabase/functions/     r2-upload-url, create-payment, payment-webhook, _shared
 ├── templates/page.html     File mẫu để copy khi làm trang mới
 └── docs/                   Tài liệu bài thực hành, case study
 ```
@@ -45,6 +47,46 @@ truyen-xanh/
 | Lê Quốc Thắng | 11 | member/library (nút Đăng xuất), layout.js |
 | Phạm Thanh Bình | 8, 9, 10 | stories/detail (theo dõi, đánh giá, bình luận), member/library, stories/reader (lưu lịch sử) |
 | Đỗ Minh Kỳ | 14, 15, 16, 17, 18 | author/stats, admin/users, admin/stories, admin/genres, admin/comments |
+
+## Cập nhật nhanh DB lên bản Sprint 6
+Dán và chạy **một file** `db/migrations/ALL_sprint3-6.sql` trong Supabase SQL Editor (sao lưu trước; chạy lại được). Dữ liệu thử: `db/seed_test_ALL.sql`. Kiểm tra: `db/tests/regression.sql` (0 lỗi). Hàm thanh toán: xem `db/README.md` mục 5c.
+
+## Phân công Sprint 6 (tuần 11–12, 23 điểm)
+| Người | Story | File |
+|---|---|---|
+| Đỗ Minh Kỳ | 26, 27 | admin/revenue (doanh thu gói và theo truyện), db/migrations/005 |
+| Lê Quốc Thắng | 28 | admin/content (thống kê nội dung) |
+| Phạm Thanh Bình | 41 | mobile/ (vỏ Capacitor), sw.js (PWA), docs/API-REST.md |
+| Cả nhóm | Kiểm thử tích hợp | db/tests/regression.sql, docs/TEST-PLAN.md |
+
+Chi tiết: **`docs/SPRINT6.md`**. DB cũ: chạy `db/migrations/ALL_sprint3-6.sql`. Trước khi nộp: chạy `db/tests/regression.sql` (0 lỗi) và làm theo `docs/TEST-PLAN.md`.
+
+## Phân công Sprint 5 (tuần 9–10, 23 điểm)
+| Người | Story | File |
+|---|---|---|
+| Đỗ Minh Kỳ | 24, 23 | admin/orders (đối soát), admin/reports (xử lý báo cáo), admin/users (hạn chế), db/migrations/004 |
+| Phạm Thanh Bình | 37, 39 | stories/reader (thảo luận chương), member/notifications + chuông trong layout.js |
+| Lê Quốc Thắng | 38, 25 | nút Báo cáo (ui.js, stories/detail, stories/reader), admin/members (thống kê) |
+
+Chi tiết và kịch bản thử: **`docs/SPRINT5.md`**. DB cũ: chạy `db/migrations/ALL_sprint3-6.sql`.
+
+## Phân công Sprint 4 (tuần 7–8, 25 điểm)
+| Người | Story | File |
+|---|---|---|
+| Đỗ Minh Kỳ | 22, 20 | admin/access (giá bán lẻ), author/chapters (hẹn giờ), author/edit (tiến độ truyện), db/migrations/003 |
+| Phạm Thanh Bình | 33, 34 | member/checkout (gia hạn, mua lẻ), supabase/functions/create-payment, stories/detail + reader (nút mua) |
+| Lê Quốc Thắng | 35, 36, 40 | stories/detail (quyền gộp), member/billing (lịch sử), track_view + reader (lượt đọc) |
+
+Chi tiết và kịch bản thử: **`docs/SPRINT4.md`**. DB cũ: chạy `db/migrations/ALL_sprint3-6.sql` rồi deploy lại `create-payment`.
+
+## Phân công Sprint 3 (tuần 5–6, 25 điểm)
+| Người | Story | File |
+|---|---|---|
+| Đỗ Minh Kỳ | 19, 21 | admin/access, admin/plans, db/migrations/002 |
+| Phạm Thanh Bình | 31, 32 | stories/reader (khung mua gói), member/checkout, supabase/functions/create-payment + payment-webhook |
+| Lê Quốc Thắng | 29, 30 | index, stories/list, stories/detail (nhãn miễn phí/trả phí) |
+
+Chi tiết, thứ tự làm, kịch bản thử và tiêu chí hoàn thành: **`docs/SPRINT3.md`**. DB cũ phải chạy `db/migrations/ALL_sprint3-6.sql` (xóa cột `chapters.content`, sao lưu trước).
 
 Đây là khung đã nối sẵn với `API.xxx()`; chưa kiểm thử với dữ liệu thật. Quyền admin: chạy lệnh 1 trong `db/dev.sql` để tài khoản của bạn thành admin.
 

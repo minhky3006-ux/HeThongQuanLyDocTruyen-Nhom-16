@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
+    <title>Thống kê nội dung · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="admin" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Thống kê nội dung</h1>
+      <div id="gate"></div>
+      <div id="app" hidden>
+        <form class="row" id="f" style="margin: 12px 0; align-items: flex-end">
+          <div class="field"><label for="from">Từ ngày</label><input id="from" class="input" type="date" required /></div>
+          <div class="field"><label for="to">Đến ngày</label><input id="to" class="input" type="date" required /></div>
+          <div class="field"><label for="n">Số dòng mỗi bảng</label><select id="n" class="input"><option>5</option><option selected>10</option><option>20</option></select></div>
+          <button class="btn">Xem</button>
+          <button type="button" class="btn ghost" id="csv">Xuất CSV</button>
+        </form>
+        <p class="row" style="margin: 0 0 8px"><button class="btn ghost sm" data-p="7">7 ngày</button><button class="btn ghost sm" data-p="30">30 ngày</button><button class="btn ghost sm" data-p="90">90 ngày</button></p>
+        <p class="msg" id="m" hidden role="alert"></p>
+        <div class="stat-grid" id="tot"></div>
+        <h2>Truyện được đọc nhiều</h2><div class="card" id="viewed"></div>
+        <h2>Truyện nhiều người theo dõi</h2><div class="card" id="followed"></div>
+        <h2>Chương nhiều lượt đọc</h2><div class="card" id="cread"></div>
+        <h2>Chương nhiều thảo luận</h2><div class="card" id="cdisc"></div>
+        <h2>Thể loại được quan tâm</h2><div class="card" id="genres"></div>
+        <p class="muted" style="font-size: 0.85rem; margin-top: 8px">
+          Lượt đọc chỉ tính khi người đọc đọc được chương (sau 8 giây mở trang, mỗi người một lần mỗi giờ). Số người theo dõi là tổng hiện tại; "mới" là số theo dõi trong khoảng đã chọn.
+        </p>
+      </div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script src="../../assets/js/admin.js"></script>
+    <script>
+      let last = null;
+      (async () => {
+        if (!(await requireAdmin("content"))) return;
+        $("app").hidden = false;
+        const setRange = (days) => {
+          const t = new Date();
+          $("to").value = isoDay(t);
+          $("from").value = isoDay(new Date(t.getTime() - (days - 1) * 864e5));
+        };
+        setRange(30);
+        const card = (n, t) => `<div class="card"><b>${n}</b>${t}</div>`;
+        const fmt = (n) => Number(n || 0).toLocaleString("vi-VN");
+        // Danh sách xếp hạng có thanh ngang so với giá trị lớn nhất
+        const rank = (items, valueKey, label, unit, extra = () => "") => {
+          const max = Math.max(1, ...items.map((x) => +x[valueKey]));
+          return (
+            items
+              .map(
+                (x, i) => `<div class="list-row" style="align-items:center"><span style="min-width:28px" class="muted">${i + 1}</span><span style="flex:1;min-width:180px">${label(x)}<div class="bar" style="width:${(x[valueKey] / max) * 100}%;margin-top:4px"></div></span><span style="min-width:110px;text-align:right"><b>${fmt(x[valueKey])}</b> <span class="muted" style="font-size:.8rem">${unit}</span>${extra(x)}</span></div>`,
+              )
+              .join("") || emptyHTML("Chưa có dữ liệu trong khoảng này.")
+          );
+        };
+        const story = (x) => `<a href="../stories/detail.html?id=${x.story_id}">${esc(x.title)}</a>`;
+        const chap = (x) => `<a href="../stories/reader.html?id=${x.story_id}&ch=${x.number}">${esc(x.story_title)} · chương ${x.number}${x.title ? ": " + esc(x.title) : ""}</a>`;
+        async function load() {
+          $("m").hidden = true;
+          try {
+            last = await API.adminContentStats($("from").value, $("to").value, +$("n").value);
+            const t = last.totals;
+            $("tot").innerHTML = card(fmt(t.views), "Lượt xem truyện") + card(fmt(t.chapter_views), "Lượt đọc chương") + card(fmt(t.new_followers), "Lượt theo dõi mới") + card(fmt(t.chapter_comments), "Thảo luận chương") + card(fmt(t.published_stories), "Truyện đã đăng");
+            $("viewed").innerHTML = rank(last.top_viewed, "views", story, "lượt xem", (x) => `<br><span class="muted" style="font-size:.8rem">tổng từ trước: ${fmt(x.total_views)}</span>`);
+            $("followed").innerHTML = rank(last.top_followed, "followers", story, "theo dõi", (x) => `<br><span class="muted" style="font-size:.8rem">+${fmt(x.new_followers)} trong kỳ</span>`);
+            $("cread").innerHTML = rank(last.top_chapters_read, "views", chap, "lượt đọc");
+            $("cdisc").innerHTML = rank(last.top_chapters_discussed, "comments", chap, "bình luận");
+            $("genres").innerHTML = rank(last.genres, "views", (x) => esc(x.name), "lượt xem", (x) => `<br><span class="muted" style="font-size:.8rem">${x.stories} truyện · ${fmt(x.followers)} theo dõi</span>`);
+          } catch (e) {
+            showMsg($("m"), e.message);
+          }
+        }
+        $("f").onsubmit = (e) => {
+          e.preventDefault();
+          load();
+        };
+        document.querySelector("p.row").onclick = (e) => {
+          const b = e.target.closest("button[data-p]");
+          if (!b) return;
+          setRange(+b.dataset.p);
+          load();
+        };
+        $("csv").onclick = () => {
+          if (!last) return;
+          const rows = [["Bảng", "Tên", "Giá trị", "Ghi chú"]];
+          last.top_viewed.forEach((x) => rows.push(["Truyện đọc nhiều", x.title, x.views, "tổng từ trước " + x.total_views]));
+          last.top_followed.forEach((x) => rows.push(["Truyện nhiều theo dõi", x.title, x.followers, "mới " + x.new_followers]));
+          last.top_chapters_read.forEach((x) => rows.push(["Chương nhiều lượt đọc", `${x.story_title} - chương ${x.number}`, x.views, ""]));
+          last.top_chapters_discussed.forEach((x) => rows.push(["Chương nhiều thảo luận", `${x.story_title} - chương ${x.number}`, x.comments, ""]));
+          last.genres.forEach((x) => rows.push(["Thể loại", x.name, x.views, `${x.stories} truyện, ${x.followers} theo dõi`]));
+          downloadCSV(`thong-ke-noi-dung_${$("from").value}_${$("to").value}.csv`, rows);
+        };
+        load();
+      })();
+    </script>
+  </body>
+</html>

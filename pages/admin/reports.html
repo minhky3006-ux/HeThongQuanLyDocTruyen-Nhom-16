@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
+    <title>Báo cáo bình luận · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="admin" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Báo cáo bình luận</h1>
+      <div id="gate"></div>
+      <div class="tabs" id="tabs" hidden>
+        <button data-o="1" class="on">Đang chờ xử lý</button><button data-o="0">Đã xử lý</button><button data-o="log">Nhật ký kiểm duyệt</button>
+      </div>
+      <div class="card" id="list" hidden></div>
+      <div class="row" id="pg" style="justify-content: center; margin-top: 12px" hidden>
+        <button class="btn ghost sm" id="prev">‹ Trước</button><span id="pn" class="muted"></span><button class="btn ghost sm" id="next">Sau ›</button>
+      </div>
+      <p class="msg" id="m" hidden role="alert"></p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script src="../../assets/js/admin.js"></script>
+    <script>
+      let open = true,
+        log = false,
+        page = 0;
+      const ACT_VI = { hide_comment: "Ẩn bình luận", dismiss_reports: "Bỏ qua báo cáo", restrict: "Hạn chế bình luận", lift_restriction: "Gỡ hạn chế", lock: "Khóa tài khoản", unlock: "Mở khóa" };
+      (async () => {
+        if (!(await requireAdmin("reports"))) return;
+        $("tabs").hidden = false;
+        $("list").hidden = false;
+        const row = (r) => {
+          const restricted = r.author_restricted_until && new Date(r.author_restricted_until) > new Date();
+          return `<div class="list-row" style="align-items:flex-start"><div style="flex:1;min-width:240px">
+            <span class="muted" style="font-size:.85rem"><b>${esc(r.author_name)}</b>${r.author_locked ? ' <span class="badge warn">Đã khóa</span>' : ""}${restricted ? ` <span class="badge lock">Hạn chế đến ${fmtDay(r.author_restricted_until)}</span>` : ""} · <a href="../stories/detail.html?id=${r.story_id}">${esc(r.story_title)}</a>${r.chapter_number ? " · chương " + r.chapter_number : ""}</span>
+            <p style="white-space:pre-wrap;word-break:break-word;margin:4px 0">${esc(r.body)}</p>
+            <span class="badge warn">${r.report_count} báo cáo</span> <span class="muted" style="font-size:.85rem">${r.reasons.map((x) => esc(REPORT_VI[x] || x)).join(", ")} · gần nhất ${fmtDateTime(r.last_reported_at)}${r.is_hidden ? " · <b>bình luận đang ẩn</b>" : ""}</span>
+            ${r.notes?.length ? `<p class="muted" style="font-size:.85rem;margin:4px 0">Ghi chú: ${r.notes.map(esc).join(" | ")}</p>` : ""}</div>
+            <span class="row" style="flex-direction:column;align-items:stretch">${
+              open
+                ? `<button class="btn sm danger" data-c="${r.comment_id}" data-act="hide">Ẩn bình luận</button><button class="btn sm ghost" data-c="${r.comment_id}" data-act="dismiss">Bỏ qua báo cáo</button>`
+                : ""
+            }<button class="btn sm ghost" data-u="${r.author_id}" data-act="${restricted ? "unrestrict" : "restrict"}">${restricted ? "Gỡ hạn chế" : "Hạn chế tác giả 7 ngày"}</button>${
+              r.author_locked ? "" : `<button class="btn sm ghost" data-u="${r.author_id}" data-act="lock">Khóa tài khoản</button>`
+            }</span></div>`;
+        };
+        async function load() {
+          $("list").innerHTML = "Đang tải...";
+          try {
+            if (log) {
+              // Nhật ký kiểm duyệt: mọi hành động của quản trị viên ở mục này
+              const ls = await API.adminModerationLog(page);
+              $("list").innerHTML =
+                ls
+                  .map(
+                    (l) =>
+                      `<div class="list-row"><span><strong>${esc(ACT_VI[l.action] || l.action)}</strong> · ${esc(l.target?.display_name || "—")}<br><span class="muted" style="font-size:.85rem">${fmtDateTime(l.created_at)} · bởi ${esc(l.admin?.display_name || "—")}${l.until_at ? " · đến " + fmtDay(l.until_at) : ""}${l.reason ? " · " + esc(l.reason) : ""}</span></span></div>`,
+                  )
+                  .join("") || emptyHTML("Chưa có hành động kiểm duyệt nào.");
+              $("pn").textContent = "Trang " + (page + 1);
+              $("prev").disabled = page === 0;
+              $("next").disabled = ls.length < API.PAGE;
+              $("pg").hidden = false;
+              return;
+            }
+            const rs = await API.adminReportQueue(open, page);
+            $("list").innerHTML = rs.map(row).join("") || emptyHTML(open ? "Không có báo cáo nào đang chờ." : "Chưa có báo cáo nào được xử lý.");
+            $("pn").textContent = "Trang " + (page + 1);
+            $("prev").disabled = page === 0;
+            $("next").disabled = rs.length < API.PAGE;
+            $("pg").hidden = false;
+          } catch (e) {
+            showError($("list"), e);
+          }
+        }
+        $("tabs").onclick = (e) => {
+          const b = e.target.closest("button[data-o]");
+          if (!b) return;
+          log = b.dataset.o === "log";
+          open = b.dataset.o === "1";
+          page = 0;
+          document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
+          load();
+        };
+        $("list").onclick = async (e) => {
+          const b = e.target.closest("button[data-act]");
+          if (!b) return;
+          const act = b.dataset.act;
+          try {
+            if (act === "hide" || act === "dismiss") {
+              const note = prompt(act === "hide" ? "Ghi chú khi ẩn bình luận (không bắt buộc):" : "Lý do bỏ qua báo cáo (không bắt buộc):", "");
+              if (note === null) return;
+              b.disabled = true;
+              await API.adminHandleReports(+b.dataset.c, act, note || null);
+            } else if (act === "restrict") {
+              const why = prompt("Lý do hạn chế bình luận 7 ngày (người dùng sẽ thấy):", "Vi phạm quy tắc bình luận");
+              if (why === null) return;
+              await API.adminRestrictUser(b.dataset.u, 7, why || null);
+            } else if (act === "unrestrict") {
+              await API.adminRestrictUser(b.dataset.u, 0, "Gỡ hạn chế");
+            } else if (act === "lock") {
+              if (!confirm("Khóa tài khoản này? Họ sẽ không đăng truyện, bình luận, đánh giá được.")) return;
+              const why = prompt("Lý do khóa (ghi vào nhật ký):", "");
+              if (why === null) return;
+              await API.setUserLocked(b.dataset.u, true, why || null);
+            }
+            load();
+          } catch (err) {
+            showMsg($("m"), err.message);
+            b.disabled = false;
+          }
+        };
+        $("prev").onclick = () => {
+          page--;
+          load();
+        };
+        $("next").onclick = () => {
+          page++;
+          load();
+        };
+        load();
+      })();
+    </script>
+  </body>
+</html>

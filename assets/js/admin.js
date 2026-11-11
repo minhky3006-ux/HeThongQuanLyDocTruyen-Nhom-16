@@ -1,9 +1,17 @@
-/* admin.js — dùng chung cho các trang quản trị (Sprint 2: story 15–18). Nạp sau api.js, ui.js, layout.js. */
+/* admin.js — dùng chung cho các trang quản trị. Nạp sau api.js, ui.js, layout.js. */
 const ADMIN_NAV = [
   ["users", "users.html", "Người dùng"],
   ["stories", "stories.html", "Duyệt/gỡ truyện"],
   ["genres", "genres.html", "Thể loại"],
   ["comments", "comments.html", "Bình luận"],
+  ["banned", "banned-words.html", "Từ khóa cấm"],
+  ["access", "access.html", "Chính sách truy cập"],
+  ["plans", "plans.html", "Gói đọc"],
+  ["reports", "reports.html", "Báo cáo"],
+  ["orders", "orders.html", "Giao dịch"],
+  ["members", "members.html", "Thống kê thành viên"],
+  ["revenue", "revenue.html", "Doanh thu"],
+  ["content", "content.html", "Thống kê nội dung"],
 ];
 /* Kiểm tra quyền admin, vẽ thanh menu con. Trả về true nếu được phép vào trang. */
 async function requireAdmin(active) {

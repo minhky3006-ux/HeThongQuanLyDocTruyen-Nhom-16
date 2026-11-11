@@ -377,7 +377,6 @@ input[type="file"] {
   }
 }
 
-/* ===== Sprint 2: bình luận, đánh giá, tab, bảng quản trị, biểu đồ ===== */
 .tabs {
   display: flex;
   gap: 8px;
@@ -500,4 +499,165 @@ input[type="file"] {
 .badge.warn {
   background: #fdecea;
   color: var(--danger);
+}
+
+.badge.lock {
+  background: #fff4dc;
+  color: #a86b00;
+}
+.chapters a .muted + .badge,
+.chapters a .badge {
+  margin-left: 8px;
+}
+.paywall {
+  text-align: center;
+  padding: 28px 16px;
+  border: 1px dashed var(--primary);
+  border-radius: var(--r-md);
+  background: var(--primary-soft);
+}
+.paywall h2 {
+  margin: 0 0 6px;
+}
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.plan-card b.price {
+  display: block;
+  font-size: 1.4rem;
+  color: var(--primary-dark);
+}
+.plan-card.off {
+  opacity: 0.6;
+}
+.radio-row label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 4px 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.banner {
+  background: #fff4dc;
+  color: #7a4d00;
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  margin-top: 16px;
+  font-size: 0.9rem;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+.modal-box {
+  width: 100%;
+  max-width: 420px;
+}
+.bell-badge {
+  display: inline-block;
+  min-width: 16px;
+  padding: 0 5px;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 16px;
+  text-align: center;
+}
+.bar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--primary);
+  min-width: 2px;
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.stat-grid .card b {
+  display: block;
+  font-size: 1.5rem;
+  color: var(--primary-dark);
+}
+.unread {
+  background: var(--primary-soft);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+@media (max-width: 768px) {
+  /* iOS tự phóng to trang khi ô nhập có chữ nhỏ hơn 16px */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+@media (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+  }
+  .btn.sm {
+    min-height: 38px;
+  }
+}
+
+/* Thanh gợi ý cài ứng dụng (PWA) */
+.install-bar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 8px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font-size: 0.88rem;
+}
+.install-bar span {
+  flex: 1;
+}
+@media (min-width: 768px) {
+  .install-bar {
+    left: auto;
+    right: 16px;
+    bottom: 16px;
+    max-width: 420px;
+  }
 }

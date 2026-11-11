@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#46B07A" />
     <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
     <title>Đọc truyện · TruyệnXanh</title>
     <link
       rel="stylesheet"
@@ -21,6 +25,18 @@
           <a class="btn ghost" id="pv" hidden>‹ Chương trước</a><a class="btn" id="nx" hidden>Chương sau ›</a>
         </div>
       </article>
+      <section id="disc" hidden style="max-width: 720px; margin: 24px auto 0">
+        <h2>Thảo luận chương này</h2>
+        <div class="card">
+          <form id="cf" style="margin-bottom: 12px">
+            <textarea id="cb" class="input" rows="3" maxlength="2000" placeholder="Chia sẻ cảm nghĩ về chương này..." required></textarea>
+            <p class="row" style="margin-top: 8px"><button class="btn sm">Gửi</button></p>
+          </form>
+          <p class="msg" id="cm" hidden role="alert"></p>
+          <div id="cl"></div>
+          <p class="row" style="justify-content: center; margin-top: 8px"><button class="btn ghost sm" id="more" hidden>Xem thêm</button></p>
+        </div>
+      </section>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../../assets/js/config.js"></script>
@@ -41,7 +57,16 @@
           document.title = `${s.title} - Chương ${num}`;
           $("t").innerHTML =
             `<a href="detail.html?id=${id}" class="muted" style="font-size:.9rem">${esc(s.title)}</a><br>Chương ${num}${c.title ? ": " + esc(c.title) : ""}`;
-          if (s.kind === "comic") {
+          // DB đã trả content/ảnh rỗng nếu chưa có quyền đọc (RLS + can_read_chapter), trang chỉ hiển thị khung mua gói.
+          if (!c.canRead) {
+            const here = location.pathname + location.search;
+            const user = await API.currentUser();
+            $("body").innerHTML = `<div class="paywall"><h2>🔒 Chương trả phí</h2><p class="muted" style="margin-bottom:14px">Bạn cần gói đọc${s.price ? " hoặc mua truyện" : ""} để đọc chương này.</p>${
+              user
+                ? `<p class="row" style="justify-content:center">${s.price ? `<a class="btn" href="../member/checkout.html?story=${id}&back=${encodeURIComponent(here)}">Mua truyện ${vnd(s.price)}</a>` : ""}<a class="btn ${s.price ? "ghost" : ""}" href="../member/checkout.html?back=${encodeURIComponent(here)}">Xem các gói đọc</a></p>`
+                : `<a class="btn" href="../auth/login.html?next=${encodeURIComponent(here)}">Đăng nhập để tiếp tục</a>`
+            }</div>`;
+          } else if (s.kind === "comic") {
             $("rd").classList.add("comic");
             $("body").innerHTML =
               c.chapter_pages
@@ -62,12 +87,85 @@
             $("nx").href = `reader.html?id=${id}&ch=${chs[i + 1].number}`;
             $("nx").hidden = false;
           }
-          API.trackView(id, c.id);
-          API.saveHistory(id, c.id, 0).catch(() => {});
+          if (c.canRead) {
+            API.saveHistory(id, c.id, 0).catch(() => {});
+            // chỉ tính lượt đọc khi trang còn mở sau 8 giây (không tính người mở rồi thoát ngay)
+            const count = () => {
+              document.removeEventListener("visibilitychange", count);
+              API.trackView(id, c.id);
+            };
+            setTimeout(() => (document.hidden ? document.addEventListener("visibilitychange", count) : count()), 8000);
+          }
+          if (c.canRead) setupDiscussion(id, c.id);
         } catch (e) {
           showError($("body"), e);
         }
       })();
+
+      // thảo luận theo chương
+      async function setupDiscussion(storyId, chapterId) {
+        $("disc").hidden = false;
+        const u = await API.currentUser();
+        let page = 0;
+        const item = (c) => commentItemHTML(c, u && u.id);
+        if (u)
+          API.myRestriction()
+            .then((r) => {
+              if (!r) return;
+              $("cb").disabled = true;
+              $("cf").querySelector("button").disabled = true;
+              showMsg($("cm"), `Bạn đang bị hạn chế bình luận đến ${fmtDay(r.until_at)}${r.reason ? " (" + r.reason + ")" : ""}.`);
+            })
+            .catch(() => {});
+        async function load(reset) {
+          if (reset) {
+            page = 0;
+            $("cl").innerHTML = "";
+          }
+          try {
+            const cs = await API.listChapterComments(chapterId, page);
+            $("cl").insertAdjacentHTML("beforeend", cs.map(item).join(""));
+            if (!$("cl").children.length) $("cl").innerHTML = emptyHTML("Chưa có thảo luận nào. Hãy là người đầu tiên!");
+            $("more").hidden = cs.length < API.PAGE;
+          } catch (e) {
+            showError($("cl"), e);
+          }
+        }
+        $("more").onclick = () => {
+          page++;
+          load();
+        };
+        $("cf").onsubmit = async (e) => {
+          e.preventDefault();
+          if (!u) return (location.href = "../auth/login.html?next=" + encodeURIComponent(location.pathname + location.search));
+          const b = $("cf").querySelector("button");
+          b.disabled = true;
+          try {
+            const r = await API.addComment(storyId, $("cb").value, chapterId);
+            $("cf").reset();
+            $("cm").hidden = true;
+            if (r.auto_hidden) showMsg($("cm"), "Bình luận chứa từ khóa không phù hợp nên đang được ẩn chờ quản trị viên xem xét.");
+            load(true);
+          } catch (err) {
+            showMsg($("cm"), err.message);
+          } finally {
+            b.disabled = false;
+          }
+        };
+        $("cl").onclick = async (e) => {
+          const rp = e.target.closest("button[data-rep]");
+          if (rp) return reportCommentFlow(+rp.dataset.rep, $("cm"));
+          const b = e.target.closest("button[data-del]");
+          if (!b || !confirm("Xóa bình luận của bạn?")) return;
+          try {
+            await API.deleteComment(+b.dataset.del);
+            load(true);
+          } catch (err) {
+            showMsg($("cm"), err.message);
+          }
+        };
+        load(true);
+      }
     </script>
   </body>
 </html>

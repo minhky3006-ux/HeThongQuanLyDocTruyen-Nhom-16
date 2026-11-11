@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
+    <title>Từ khóa cấm · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="admin" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Từ khóa cấm</h1>
+      <div id="gate"></div>
+      <div id="wrap" hidden>
+        <div class="card">
+          <form id="f" class="row" style="gap: 8px; flex-wrap: wrap">
+            <input class="input" id="w" maxlength="100" placeholder="Từ hoặc cụm từ cần chặn" required style="flex: 1; min-width: 200px" />
+            <select class="input" id="md" style="width: auto">
+              <option value="word">Khớp nguyên từ</option>
+              <option value="contains">Chứa là khớp</option>
+            </select>
+            <button class="btn sm">Thêm</button>
+          </form>
+          <p class="msg" id="m" hidden role="alert"></p>
+        </div>
+        <div class="card" style="margin-top: 12px">
+          <p class="row" style="gap: 8px; flex-wrap: wrap">
+            <input class="input" id="flt" placeholder="Lọc danh sách..." style="max-width: 260px" />
+            <button class="btn ghost sm" id="scan">Quét lại bình luận đang hiển thị</button>
+            <span class="muted" id="cnt"></span>
+          </p>
+          <div id="list">Đang tải...</div>
+        </div>
+      </div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script src="../../assets/js/admin.js"></script>
+    <script>
+      (async () => {
+        if (!(await requireAdmin("banned"))) return;
+        $("wrap").hidden = false;
+        let all = [];
+        const draw = () => {
+          const k = $("flt").value.trim().toLowerCase();
+          const ws = k ? all.filter((x) => x.word.toLowerCase().includes(k)) : all;
+          $("cnt").textContent = all.length + " từ khóa";
+          $("list").innerHTML =
+            ws
+              .map(
+                (x) =>
+                  `<div class="list-row"><span style="flex:1;word-break:break-word"><b>${esc(x.word)}</b> <span class="muted" style="font-size:.8rem">${x.mode === "contains" ? "chứa là khớp" : "nguyên từ"}</span></span><button class="btn sm danger" data-id="${x.id}">Xóa</button></div>`,
+              )
+              .join("") || emptyHTML("Chưa có từ khóa nào.");
+        };
+        async function load() {
+          try {
+            all = await API.listBannedWords();
+            draw();
+          } catch (e) {
+            showError($("list"), e);
+          }
+        }
+        $("flt").oninput = draw;
+        $("f").onsubmit = async (e) => {
+          e.preventDefault();
+          const b = $("f").querySelector("button");
+          b.disabled = true;
+          try {
+            await API.addBannedWord($("w").value, $("md").value);
+            $("w").value = "";
+            showMsg($("m"), "Đã thêm. Bình luận mới chứa từ này sẽ bị ẩn; bấm \"Quét lại\" để áp dụng cho bình luận cũ.", true);
+            await load();
+          } catch (err) {
+            showMsg($("m"), err.message);
+          } finally {
+            b.disabled = false;
+          }
+        };
+        $("list").onclick = async (e) => {
+          const b = e.target.closest("button[data-id]");
+          if (!b || !confirm("Xóa từ khóa này?")) return;
+          b.disabled = true;
+          try {
+            await API.deleteBannedWord(+b.dataset.id);
+            await load();
+          } catch (err) {
+            showMsg($("m"), err.message);
+            b.disabled = false;
+          }
+        };
+        $("scan").onclick = async () => {
+          if (!confirm("Ẩn mọi bình luận đang hiển thị có chứa từ khóa cấm? Bình luận bạn đã duyệt cho hiện lại sẽ không bị ẩn lại.")) return;
+          $("scan").disabled = true;
+          try {
+            const n = await API.adminApplyBannedWords();
+            showMsg($("m"), `Đã ẩn ${n} bình luận. Xem ở tab "Tự động ẩn" trang Bình luận.`, true);
+          } catch (err) {
+            showMsg($("m"), err.message);
+          } finally {
+            $("scan").disabled = false;
+          }
+        };
+        load();
+      })();
+    </script>
+  </body>
+</html>

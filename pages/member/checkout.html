@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
+    <title>Gói đọc · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="library" data-root="../../">
+    <main class="container narrow">
+      <h1 style="margin-top: 20px" id="h">Gói đọc</h1>
+      <div id="box"><p class="empty">Đang tải...</p></div>
+      <p class="msg" id="m" hidden role="alert"></p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      const qs = new URLSearchParams(location.search);
+      const toLogin = () => (location.href = "../auth/login.html?next=" + encodeURIComponent(location.pathname + location.search));
+      // Trang để quay lại đọc sau khi thanh toán: chỉ nhận đường dẫn cùng trang web (chặn chuyển hướng sang trang lạ)
+      function safeBack(v) {
+        try {
+          const u = new URL(v, location.href);
+          return u.origin === location.origin ? u.pathname + u.search : "";
+        } catch (_) {
+          return "";
+        }
+      }
+      const itemName = (o) => o.plans?.name || (o.stories?.title ? "Truyện: " + o.stories.title : "Đơn hàng");
+      const planInfo = (p) =>
+        `<b class="price">${vnd(p.price)}</b><h3>${esc(p.name)}</h3><p class="muted">${p.duration_days} ngày · ${p.scope === "all" ? "Mọi truyện trả phí" : "Truyện chọn lọc"}</p><p>${esc(p.description || "")}</p>`;
+
+      async function showPlans() {
+        const back = safeBack(qs.get("back"));
+        if (back) sessionStorage.setItem("tx_back", back);
+        const plans = await API.listPlans();
+        // người đã đăng nhập thấy gói đang dùng; mua thêm cùng gói = gia hạn nối tiếp, không mất ngày còn lại
+        const subs = (await API.currentUser()) ? await API.mySubscriptions().catch(() => []) : [];
+        const active = subs.filter((x) => new Date(x.expires_at) > new Date());
+        const mine = new Map();
+        active.forEach((x) => {
+          if (!mine.has(x.plan_id) || new Date(x.expires_at) > new Date(mine.get(x.plan_id))) mine.set(x.plan_id, x.expires_at);
+        });
+        $("box").innerHTML = plans.length
+          ? `${active.length ? `<p class="card" style="padding:10px 14px">Bạn đang dùng: ${active.map((x) => `<b>${esc(x.plans?.name)}</b> (đến ${fmtDay(x.expires_at)})`).join(", ")}. <a href="billing.html">Xem lịch sử</a></p>` : ""}<p class="muted">Chọn gói để đọc các truyện trả phí.</p><div class="plan-grid">${plans
+              .map(
+                (p) =>
+                  `<div class="card plan-card">${planInfo(p)}${mine.has(p.id) ? `<p class="muted" style="font-size:.85rem">Đang dùng đến ${fmtDay(mine.get(p.id))}. Mua thêm sẽ nối tiếp thời hạn.</p>` : ""}<a class="btn" href="checkout.html?plan=${p.id}">${mine.has(p.id) ? "Gia hạn" : "Chọn gói này"}</a></div>`,
+              )
+              .join("")}</div>`
+          : emptyHTML("Hiện chưa có gói đọc nào đang bán.");
+      }
+
+      async function showStoryConfirm(storyId) {
+        const u = await API.currentUser();
+        if (!u) return toLogin();
+        const [s, access] = await Promise.all([API.getStory(storyId), API.myStoryAccess(storyId)]);
+        const back = `../stories/detail.html?id=${storyId}`;
+        // đã có quyền (gói còn hạn hoặc đã mua) thì không cho thanh toán lại
+        if (access.purchased || access.subscription)
+          return ($("box").innerHTML = `<div class="card"><p>🔓 ${accessSourceText(access)}</p><p class="muted">Bạn không cần thanh toán lại.</p><p class="row" style="margin-top:8px"><a class="btn" href="${back}">Về trang truyện</a></p></div>`);
+        if (s.access_policy === "free" || !s.price)
+          return ($("box").innerHTML = emptyHTML("Truyện này hiện không bán lẻ. Bạn có thể đọc bằng gói đọc."));
+        $("box").innerHTML = `<div class="card plan-card"><b class="price">${vnd(s.price)}</b><h3>${esc(s.title)}</h3><p class="muted">Mua riêng truyện, đọc không giới hạn thời gian.</p><button class="btn block" id="pay">Thanh toán ${vnd(s.price)}</button></div>
+          <p class="muted" style="font-size:.85rem;margin-top:8px">Giá được chốt tại thời điểm tạo đơn.</p>`;
+        sessionStorage.setItem("tx_back", back);
+        $("pay").onclick = async () => {
+          $("pay").disabled = true;
+          $("m").hidden = true;
+          try {
+            const { payUrl } = await API.createStoryPayment(storyId);
+            location.href = payUrl;
+          } catch (e) {
+            showMsg($("m"), e.message);
+            $("pay").disabled = false;
+          }
+        };
+      }
+
+      async function showConfirm(planId) {
+        const u = await API.currentUser();
+        if (!u) return toLogin();
+        const plan = (await API.listPlans()).find((p) => p.id === planId);
+        if (!plan) return ($("box").innerHTML = emptyHTML("Gói này không tồn tại hoặc đã ngừng bán."));
+        $("box").innerHTML = `<div class="card plan-card">${planInfo(plan)}<button class="btn block" id="pay">Thanh toán ${vnd(plan.price)}</button></div>
+          <p class="muted" style="font-size:.85rem;margin-top:8px">Bạn sẽ được chuyển sang cổng thanh toán. Giá lấy theo hệ thống tại thời điểm tạo đơn.</p>`;
+        $("pay").onclick = async () => {
+          $("pay").disabled = true;
+          $("m").hidden = true;
+          try {
+            const { payUrl } = await API.createPayment(plan.id);
+            location.href = payUrl;
+          } catch (e) {
+            showMsg($("m"), e.message);
+            $("pay").disabled = false;
+          }
+        };
+      }
+
+      async function showResult(orderId) {
+        $("h").textContent = "Kết quả thanh toán";
+        const back = sessionStorage.getItem("tx_back");
+        const cfg = window.APP_CONFIG || {};
+        // Nội dung chuyển khoản chứa mã đơn, phải khớp orderCode() trong supabase/functions/_shared/payment.ts
+        const orderCode = (id) => "TX" + id.replace(/-/g, "").slice(0, 12).toUpperCase();
+        const qrBlock = (o) => {
+          if (o.provider !== "sepay" || o.status !== "pending") return "";
+          if (!cfg.PAY_BANK || !cfg.PAY_ACCOUNT) return '<p class="muted">Chưa cấu hình tài khoản nhận tiền (PAY_BANK, PAY_ACCOUNT trong config.js).</p>';
+          const memo = (cfg.PAY_MEMO_PREFIX || "") + orderCode(o.id);
+          const src = "https://qr.sepay.vn/img?" + new URLSearchParams({ acc: cfg.PAY_ACCOUNT, bank: cfg.PAY_BANK, amount: o.amount, des: memo });
+          return `<div style="text-align:center;margin:12px 0"><img src="${esc(src)}" alt="Mã QR thanh toán" style="max-width:280px;width:100%;background:#fff;border-radius:8px" />
+            <p style="margin-top:8px">Quét bằng app ngân hàng để chuyển <b>${vnd(o.amount)}</b></p></div>
+            <p class="muted" style="font-size:.85rem">Ngân hàng: <b>${esc(cfg.PAY_BANK)}</b> · STK: <b>${esc(cfg.PAY_ACCOUNT)}</b>${cfg.PAY_HOLDER ? " · " + esc(cfg.PAY_HOLDER) : ""}<br>Nội dung: <b>${esc(memo)}</b> (giữ nguyên, đừng sửa số tiền và nội dung)</p>
+            <p class="muted" style="font-size:.85rem">Trang sẽ tự cập nhật khi tiền về, thường trong vài chục giây.</p>`;
+        };
+        const draw = (o) => {
+          const ok = o.status === "paid";
+          $("box").innerHTML = `<div class="card"><p><span class="badge ${ok ? "" : o.status === "pending" ? "lock" : "warn"}">${esc(ORDER_VI[o.status] || o.status)}</span></p>
+            <p style="margin-top:8px"><b>${esc(itemName(o))}</b> · ${vnd(o.amount)}</p>
+            <p class="muted" style="font-size:.85rem">Mã đơn: ${esc(o.id)}</p>
+            ${o.status === "failed" ? `<p class="muted">${esc(o.fail_reason || "Giao dịch không thành công.")}</p>` : ""}
+            ${o.status === "pending" ? (o.provider === "sepay" ? qrBlock(o) : '<p class="muted">Đang chờ cổng thanh toán xác nhận, vui lòng đợi vài giây...</p>') : ""}
+            <p class="row" style="margin-top:12px">${back && ok ? `<a class="btn" href="${esc(back)}">Quay lại đọc truyện</a>` : ""}<a class="btn ghost" href="billing.html">Lịch sử của tôi</a></p></div>`;
+        };
+        let o = await API.getOrder(orderId);
+        draw(o);
+        // QR chuyển khoản: chờ tới 15 phút (người dùng còn phải mở app ngân hàng); cổng khác: 1 phút. Chỉ vẽ lại khi trạng thái đổi để QR không nhấp nháy.
+        const tries = o.provider === "sepay" ? 300 : 20;
+        for (let i = 0; i < tries && o.status === "pending"; i++) {
+          await new Promise((r) => setTimeout(r, 3000));
+          const n = await API.getOrder(orderId);
+          if (n.status !== o.status) draw(n);
+          o = n;
+        }
+      }
+
+      (async () => {
+        try {
+          if (qs.get("order")) {
+            if (!(await API.currentUser())) return toLogin();
+            await showResult(qs.get("order"));
+          } else if (qs.get("plan")) await showConfirm(+qs.get("plan"));
+          else if (qs.get("story")) await showStoryConfirm(+qs.get("story"));
+          else await showPlans();
+        } catch (e) {
+          showError($("box"), e);
+        }
+      })();
+    </script>
+  </body>
+</html>

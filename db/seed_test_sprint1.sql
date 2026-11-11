@@ -1,10 +1,14 @@
--- DỮ LIỆU GIẢ CHO SPRINT 1. Chạy sau schema.sql trong Supabase SQL Editor. Chạy lại nhiều lần được (tự dọn bản cũ).
+-- DỮ LIỆU GIẢ CHO SPRINT 1. Chạy sau schema.sql + db/migrations/002_sprint3_access_payments.sql trong Supabase SQL Editor. Chạy lại nhiều lần được (tự dọn bản cũ).
 -- Tài khoản test (mật khẩu chung: Test@123456):
 --   admin@example.com (admin) · tacgia1@example.com, tacgia2@example.com (tác giả) · thanhvien1..3@example.com (thành viên)
 -- Truyện: 101-105 đã đăng (3 truyện chữ, 2 truyện tranh), 106 chờ duyệt, 201-225 là 25 truyện phụ để thử phân trang.
 -- Bước 2 (sau khi upload ảnh test lên R2): chạy db/seed_test_images.sql để có ảnh bìa và trang truyện tranh.
 
 -- 0. Dọn dữ liệu test cũ
+-- (Từ Sprint 3) đơn hàng / gói / quyền sở hữu của tài khoản test tham chiếu tới truyện và tài khoản, phải xóa trước
+delete from story_purchases where user_id in (select id from auth.users where email like '%@example.com');
+delete from subscriptions   where user_id in (select id from auth.users where email like '%@example.com');
+delete from orders          where user_id in (select id from auth.users where email like '%@example.com');
 delete from stories where id between 101 and 106 or id between 201 and 225
    or author_id in (select id from auth.users where email in ('admin@example.com','tacgia1@example.com','tacgia2@example.com','thanhvien1@example.com','thanhvien2@example.com','thanhvien3@example.com'));
 delete from auth.users where email in ('admin@example.com','tacgia1@example.com','tacgia2@example.com','thanhvien1@example.com','thanhvien2@example.com','thanhvien3@example.com');   -- kéo theo profiles, theo dõi, bình luận, đánh giá, lịch sử
@@ -43,8 +47,8 @@ select v.s,g.id from (values (101,'phieu-luu'),(101,'fantasy'),(102,'doi-thuong'
 insert into story_genres(story_id,genre_id) select 200+g,(select id from genres order by id offset (g%7) limit 1) from generate_series(1,25) g;
 
 -- 4. Chương (truyện chữ có nội dung; truyện tranh chỉ có tiêu đề, ảnh thêm ở bước 2)
+create temp table _ch(sid,n,title,content) as
 with spec(sid,cnt) as (values (101,5),(102,4),(103,6),(104,2),(105,2),(106,2) union all select 200+g,1 from generate_series(1,25) g)
-insert into chapters(story_id,number,title,content)
 select s.id,n,(array['Khởi đầu','Cuộc gặp gỡ','Bí mật','Con đường phía trước','Thử thách','Hồi kết'])[n],
  case when s.kind='text' then (select string_agg(p,E'\n\n' order by k) from (select k,(array[
   'Buổi sáng, sương còn đọng trên những tán lá, và cả khu rừng như đang khẽ thở.',
@@ -59,6 +63,10 @@ select s.id,n,(array['Khởi đầu','Cuộc gặp gỡ','Bí mật','Con đư�
   'Cuối cùng, sau bao nhiêu thử thách, họ cũng tìm thấy lối ra mà mình đã kiếm tìm.'])[1+((s.id+n+k)%10)] p
   from generate_series(1,5) k) q) end
 from spec join stories s on s.id=spec.sid, generate_series(1,spec.cnt) n;
+-- Từ migration 002, nội dung chương nằm ở bảng chapter_contents (chapters không còn cột content)
+insert into chapters(story_id,number,title) select sid,n,title from _ch;
+insert into chapter_contents(chapter_id,content)
+select c.id,x.content from _ch x join chapters c on c.story_id=x.sid and c.number=x.n where x.content is not null;
 
 -- 5. Số liệu mô phỏng
 update stories set view_count=case id when 101 then 12400 when 102 then 8900 when 103 then 20100 when 104 then 6700 when 105 then 5400 else (id*37)%900 end,

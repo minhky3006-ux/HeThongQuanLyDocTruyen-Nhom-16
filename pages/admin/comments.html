@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#46B07A" />
     <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
     <title>Kiểm duyệt bình luận · TruyệnXanh</title>
     <link
       rel="stylesheet"
@@ -17,8 +21,13 @@
       <h1 style="margin-top: 20px">Kiểm duyệt bình luận</h1>
       <div id="gate"></div>
       <div class="tabs" id="tabs" hidden>
-        <button data-h="0" class="on">Đang hiển thị</button><button data-h="1">Đã ẩn</button>
+        <button data-h="auto" class="on">Tự động ẩn (chờ duyệt)</button><button data-h="visible">Đang hiển thị</button
+        ><button data-h="hidden">Tất cả đã ẩn</button>
       </div>
+      <p class="row" id="sb" hidden style="margin: 8px 0">
+        <input class="input" id="q" placeholder="Tìm trong nội dung bình luận..." maxlength="100" style="max-width: 320px" />
+        <a class="btn ghost sm" href="banned-words.html">Quản lý từ khóa cấm</a>
+      </p>
       <div class="card" id="list" hidden></div>
       <div class="row" id="pg" style="justify-content: center; margin-top: 12px" hidden>
         <button class="btn ghost sm" id="prev">‹ Trước</button><span id="pn" class="muted"></span
@@ -33,21 +42,27 @@
     <script src="../../assets/js/layout.js"></script>
     <script src="../../assets/js/admin.js"></script>
     <script>
-      let hidden = false,
-        page = 0;
+      let mode = "auto",
+        page = 0,
+        q = "";
       (async () => {
         if (!(await requireAdmin("comments"))) return;
         $("tabs").hidden = false;
+        $("sb").hidden = false;
         $("list").hidden = false;
         async function load() {
           $("list").innerHTML = "Đang tải...";
           try {
-            const cs = await API.adminComments(hidden, page);
+            const cs = await API.adminComments(mode, page, q);
             $("list").innerHTML =
               cs
                 .map(
                   (c) =>
-                    `<div class="list-row"><div style="flex:1;min-width:220px"><span class="muted" style="font-size:.85rem"><b>${esc(c.profiles?.display_name || "Ẩn danh")}</b> · <a href="../stories/detail.html?id=${c.story_id}">${esc(c.stories?.title || "")}</a> · ${fmtDate(c.created_at)}</span><p style="white-space:pre-wrap;word-break:break-word">${esc(c.body)}</p></div><span class="row"><button class="btn sm ghost" data-id="${c.id}" data-act="${hidden ? "show" : "hide"}">${hidden ? "Hiện lại" : "Ẩn"}</button><button class="btn sm danger" data-id="${c.id}" data-act="del">Xóa</button></span></div>`,
+                    `<div class="list-row"><div style="flex:1;min-width:220px"><span class="muted" style="font-size:.85rem"><b>${esc(c.profiles?.display_name || "Ẩn danh")}</b> · <a href="../stories/detail.html?id=${c.story_id}">${esc(c.stories?.title || "")}</a>${c.chapters?.number ? " · chương " + c.chapters.number : ""} · ${fmtDate(c.created_at)}</span>${c.hidden_reason ? `<span class="muted" style="font-size:.8rem;color:var(--danger,#c0392b)">${esc(c.hidden_reason)}</span>` : ""}<p style="white-space:pre-wrap;word-break:break-word">${esc(c.body)}</p></div><span class="row"><button class="btn sm ghost" data-id="${c.id}" data-act="${c.is_hidden ? "show" : "hide"}">${c.is_hidden ? "Hiện lại" : "Ẩn"}</button><button class="btn sm danger" data-id="${c.id}" data-act="del">Xóa</button>${
+                      c.profiles?.role === "admin"
+                        ? ""
+                        : `<button class="btn sm ${c.profiles?.is_locked ? "ghost" : "danger"}" data-uid="${c.user_id}" data-act="${c.profiles?.is_locked ? "unlock" : "lock"}" data-name="${esc(c.profiles?.display_name || "Ẩn danh")}">${c.profiles?.is_locked ? "Mở khóa TK" : "Khóa TK"}</button>`
+                    }</span></div>`,
                 )
                 .join("") || emptyHTML("Không có bình luận.");
             $("pn").textContent = "Trang " + (page + 1);
@@ -61,14 +76,40 @@
         $("tabs").onclick = (e) => {
           const b = e.target.closest("button[data-h]");
           if (!b) return;
-          hidden = b.dataset.h === "1";
+          mode = b.dataset.h;
           page = 0;
           document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
           load();
         };
+        let t;
+        $("q").oninput = () => {
+          clearTimeout(t);
+          t = setTimeout(() => {
+            q = $("q").value;
+            page = 0;
+            load();
+          }, 400);
+        };
         $("list").onclick = async (e) => {
-          const b = e.target.closest("button[data-id]");
+          const b = e.target.closest("button[data-id],button[data-uid]");
           if (!b) return;
+          if (b.dataset.uid) {
+            const lock = b.dataset.act === "lock";
+            let reason = null;
+            if (lock) {
+              reason = prompt(`Khóa tài khoản "${b.dataset.name}"? Người này sẽ không bình luận, đánh giá hay đăng bài được nữa.\nLý do (không bắt buộc):`);
+              if (reason === null) return;
+            } else if (!confirm(`Mở khóa tài khoản "${b.dataset.name}"?`)) return;
+            b.disabled = true;
+            try {
+              await API.setUserLocked(b.dataset.uid, lock, reason ? reason.trim() : null);
+              load();
+            } catch (err) {
+              showMsg($("m"), err.message);
+              b.disabled = false;
+            }
+            return;
+          }
           const id = +b.dataset.id,
             act = b.dataset.act;
           if (act === "del" && !confirm("Xóa vĩnh viễn bình luận này?")) return;

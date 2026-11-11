@@ -24,6 +24,16 @@ Web / App ──► Supabase (PostgreSQL + Auth + API tự sinh) ── chỉ l�
    ```
 5. **Cấu hình web**: copy `assets/js/config.example.js` thành `assets/js/config.js`, điền `SUPABASE_URL`, `SUPABASE_ANON_KEY` (Project Settings > API) và `IMG_BASE` (domain R2, có dấu `/` ở cuối). File này không commit, mỗi thành viên tự tạo trên máy mình.
    - **Đã có DB chạy bản `schema.sql` cũ?** Chạy thêm `db/migrations/001_sprint1_hardening.sql` (chạy lại nhiều lần vẫn an toàn). DB mới tạo từ `schema.sql` hiện tại không cần.
+5b. **Phần mở rộng (trả phí, gói đọc, thanh toán, kiểm duyệt, thống kê)**: sau `schema.sql` chạy **một file** `db/migrations/ALL_sprint3-6.sql`. **Sao lưu trước**: file chuyển nội dung chương sang bảng `chapter_contents` và xóa cột `chapters.content`. Chạy lại nhiều lần vẫn an toàn. Dữ liệu thử: `db/seed_test_ALL.sql` (chỉ dùng môi trường thử).
+5c. **Thanh toán**: deploy hai hàm và đặt secret:
+   ```bash
+   npx supabase secrets set PAYMENT_PROVIDER=mock SITE_URL=http://127.0.0.1:5500
+   npx supabase functions deploy create-payment
+   npx supabase functions deploy payment-webhook --no-verify-jwt
+   ```
+   `mock` = cổng giả lập (`pages/member/mock-gateway.html`), thử được không cần tài khoản. Dùng VNPay sandbox: `PAYMENT_PROVIDER=vnpay` cùng `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET` (lấy từ sandbox.vnpayment.vn), rồi khai báo URL IPN `https://<mã-project>.supabase.co/functions/v1/payment-webhook` trong trang quản trị VNPay. Chạy thật phải dùng `vnpay` để tắt cổng giả lập.
+5d. **Chương hẹn giờ**: nên bật extension `pg_cron` (Dashboard > Database > Extensions) rồi chạy `select cron.schedule('release-chapters','*/5 * * * *','select release_due_chapters()');` để chương hẹn giờ và thông báo chương mới cập nhật đúng hạn.
+5e. **Kiểm thử hồi quy**: dán `db/tests/regression.sql` vào SQL Editor, phải 0 lỗi, không để lại dữ liệu.
 6. **Chạy thử**: mở bằng Live Server, đăng ký tài khoản có tick "tác giả", đăng truyện, rồi chạy `db/dev.sql` (lệnh 1 và 2) để làm admin và duyệt truyện.
 
 ## Dùng dữ liệu trong code
@@ -65,7 +75,8 @@ Quy tắc nằm ngay trong DB nên web và app dùng chung, ai cũng không qua 
 - Vượt giới hạn băng thông của Supabase, dịch vụ có thể bị chặn đến kỳ sau. Ảnh đã đi qua R2 nên phần này chủ yếu là dữ liệu JSON, rất nhẹ.
 
 ## Giới hạn đã biết
-- Nội dung chương (`chapters.content`) hiện ai cũng đọc được qua API nếu truyện đã đăng. Khi làm chương trả phí (story 31–35) phải tách nội dung sang bảng riêng có policy kiểm tra quyền đọc, không chỉ ẩn ở giao diện.
+- Nội dung chữ của chương đã tách sang `chapter_contents` và chặn bằng RLS (`can_read_chapter`, Sprint 3). **Ảnh truyện tranh trả phí chưa bảo vệ thật**: DB giấu danh sách ảnh nhưng file trên R2 vẫn tải được nếu đoán đúng đường dẫn; cần bucket riêng + link đọc có chữ ký.
+- Từ Sprint 4 `grant_entitlement()` tự cấp quyền khi đơn thanh toán thành công; `db/dev.sql` lệnh 4 chỉ còn để cấp quyền thử không qua thanh toán.
 - Giới hạn dung lượng ở hàm cấp link dựa trên số khai báo của web, chưa phải giới hạn cứng phía R2. Nên đặt thêm quy tắc/cảnh báo dung lượng trên dashboard Cloudflare.
 - Xóa chương chỉ xóa dữ liệu trong DB, ảnh cũ vẫn còn trong R2 (tốn chỗ). Cần thêm hàm xóa ảnh ở Sprint sau.
 - Truyện tranh chưa hỗ trợ sửa ảnh của chương đã đăng: xóa chương rồi đăng lại.

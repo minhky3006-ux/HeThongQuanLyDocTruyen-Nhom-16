@@ -1,0 +1,24 @@
+{
+  "name": "truyenxanh-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vỏ ứng dụng Android/iOS (Capacitor) cho TruyệnXanh. Dùng chung 100% giao diện và API với bản web.",
+  "scripts": {
+    "set-url": "node scripts/set-url.mjs",
+    "sync": "cap sync",
+    "android": "cap open android",
+    "ios": "cap open ios",
+    "doctor": "cap doctor",
+    "icons": "capacitor-assets generate --android --iconBackgroundColor #46B07A --splashBackgroundColor #46B07A --splashBackgroundColorDark #14211A",
+    "apk": "node scripts/build-apk.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/assets": "^3.0.5"
+  }
+}

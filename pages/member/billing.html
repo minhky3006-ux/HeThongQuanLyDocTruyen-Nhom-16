@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
+    <title>Gói &amp; giao dịch · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="library" data-root="../../">
+    <main class="container">
+      <p style="margin-top: 16px"><a href="library.html" class="muted">‹ Tủ truyện</a></p>
+      <h1 style="margin-top: 6px">Gói &amp; giao dịch</h1>
+      <div id="gate"></div>
+      <div id="app" hidden>
+        <h2>Gói đang dùng</h2>
+        <div class="card" id="subs"></div>
+        <h2>Truyện đã mua</h2>
+        <div class="card" id="buys"></div>
+        <h2>Lịch sử thanh toán</h2>
+        <div class="card" id="orders"></div>
+        <p class="row" style="justify-content: center; margin-top: 12px"><button class="btn ghost sm" id="more" hidden>Xem thêm</button></p>
+        <p style="text-align: center; margin: 16px 0"><a class="btn" href="checkout.html">Xem các gói đọc</a></p>
+      </div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      (async () => {
+        const u = await API.currentUser();
+        if (!u) {
+          $("gate").innerHTML = `<div class="empty"><p>Bạn cần đăng nhập để xem mục này.</p><p><a class="btn" href="../auth/login.html?next=${encodeURIComponent(location.pathname)}">Đăng nhập</a></p></div>`;
+          return;
+        }
+        $("app").hidden = false;
+        const now = new Date();
+        const subRow = (x) => {
+          const on = new Date(x.starts_at) <= now && new Date(x.expires_at) > now;
+          const later = new Date(x.starts_at) > now; // gia hạn nối tiếp, chưa tới ngày bắt đầu
+          return `<div class="list-row"><span><strong>${esc(x.plans?.name || "Gói đã ngừng bán")}</strong><br><span class="muted" style="font-size:.85rem">${fmtDay(x.starts_at)} → ${fmtDay(x.expires_at)} · ${x.plans?.scope === "selected" ? "Truyện chọn lọc" : "Mọi truyện trả phí"}</span></span><span class="badge ${on ? "" : later ? "lock" : "warn"}">${on ? "Đang hiệu lực" : later ? "Chờ bắt đầu" : "Đã hết hạn"}</span></div>`;
+        };
+        const buyRow = (p) =>
+          p.stories
+            ? `<a class="list-row" href="../stories/detail.html?id=${p.stories.id}"><span><strong>${esc(p.stories.title)}</strong><br><span class="muted" style="font-size:.85rem">Mua ngày ${fmtDay(p.created_at)} · không hết hạn</span></span><span class="muted">›</span></a>`
+            : `<div class="list-row"><span class="muted">Truyện không còn hiển thị · mua ngày ${fmtDay(p.created_at)}</span></div>`;
+        const orderRow = (o) =>
+          `<div class="list-row"><span><strong>${esc(o.plans?.name || (o.stories?.title ? "Truyện: " + o.stories.title : "Đơn hàng"))}</strong><br><span class="muted" style="font-size:.85rem">${fmtDateTime(o.created_at)} · ${vnd(o.amount)}${o.status === "failed" && o.fail_reason ? " · " + esc(o.fail_reason) : ""}</span></span><span class="badge ${o.status === "paid" ? "" : o.status === "pending" ? "lock" : "warn"}">${esc(ORDER_VI[o.status] || o.status)}</span></div>`;
+        let page = 0;
+        try {
+          const [subs, buys] = await Promise.all([API.mySubscriptions(), API.myPurchases()]);
+          $("subs").innerHTML = subs.map(subRow).join("") || emptyHTML("Bạn chưa đăng ký gói đọc nào.");
+          $("buys").innerHTML = buys.map(buyRow).join("") || emptyHTML("Bạn chưa mua truyện nào.");
+        } catch (e) {
+          showError($("subs"), e);
+        }
+        async function loadOrders() {
+          try {
+            const o = await API.myOrders(page);
+            $("orders").insertAdjacentHTML("beforeend", o.map(orderRow).join(""));
+            if (!$("orders").children.length) $("orders").innerHTML = emptyHTML("Chưa có giao dịch nào.");
+            $("more").hidden = o.length < API.PAGE;
+          } catch (e) {
+            showError($("orders"), e);
+          }
+        }
+        $("more").onclick = () => {
+          page++;
+          loadOrders();
+        };
+        loadOrders();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "appId": "vn.truyenxanh.app",
+  "appName": "TruyệnXanh",
+  "webDir": "www",
+  "server": {
+    "url": "https://truyenxanhvn.com/",
+    "cleartext": false,
+    "errorPath": "error.html",
+    "allowNavigation": [
+      "truyenxanhvn.com",
+      "*.truyenxanhvn.com",
+      "*.vnpayment.vn",
+      "*.supabase.co"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "never"
+  }
+}

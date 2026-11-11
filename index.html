@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#46B07A" />
     <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
     <title>Trang chủ · TruyệnXanh</title>
     <link
       rel="stylesheet"
@@ -25,6 +29,11 @@
       <div class="grid" id="hot"></div>
       <h2>Mới cập nhật</h2>
       <div class="grid" id="fresh"></div>
+      <h2>Mới phát hành</h2>
+      <div class="grid" id="released"></div>
+      <p style="text-align: center; margin: 20px 0">
+        <a class="btn ghost" href="pages/stories/list.html?sort=released">Xem tất cả truyện mới phát hành</a>
+      </p>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/js/config.js"></script>
@@ -34,14 +43,18 @@
     <script>
       (async () => {
         try {
-          const [h, f] = await Promise.all([
+          API.releaseDueChapters(); // cập nhật chương hẹn giờ đã tới hạn (dự phòng khi chưa bật pg_cron)
+          const [h, f, r] = await Promise.all([
             API.listStories({ sort: "hot" }),
             API.listStories({ sort: "new" }),
+            API.listStories({ sort: "released" }),
           ]);
           $("hot").innerHTML =
             h.items.slice(0, 10).map(cardHTML).join("") || emptyHTML("Chưa có truyện nào được đăng.");
           $("fresh").innerHTML =
             f.items.slice(0, 10).map(cardHTML).join("") || emptyHTML("Chưa có truyện nào được đăng.");
+          $("released").innerHTML =
+            r.items.slice(0, 10).map(cardHTML).join("") || emptyHTML("Chưa có truyện nào được đăng.");
         } catch (e) {
           showError($("hot"), e);
         }

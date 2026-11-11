@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
+    <title>Giao dịch · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="admin" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Giao dịch &amp; đối soát</h1>
+      <div id="gate"></div>
+      <div id="app" hidden>
+        <div class="stat-grid" id="sum"></div>
+        <div class="row" style="margin: 8px 0">
+          <select id="st" class="input" style="width: auto">
+            <option value="">Mọi trạng thái</option><option value="pending">Đang chờ</option><option value="paid">Đã thanh toán</option><option value="failed">Thất bại</option><option value="cancelled">Đã hủy</option>
+          </select>
+          <label style="display: flex; gap: 6px; align-items: center"><input type="checkbox" id="iss" checked /> Chỉ đơn bất thường</label>
+        </div>
+        <div class="card" id="list"></div>
+        <div class="row" id="pg" style="justify-content: center; margin-top: 12px" hidden>
+          <button class="btn ghost sm" id="prev">‹ Trước</button><span id="pn" class="muted"></span><button class="btn ghost sm" id="next">Sau ›</button>
+        </div>
+        <p class="msg" id="m" hidden role="alert"></p>
+      </div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script src="../../assets/js/admin.js"></script>
+    <script>
+      const ISSUE_VI = {
+        paid_no_entitlement: "Đã thu tiền, chưa có quyền đọc",
+        pending_stale: "Chờ thanh toán quá 30 phút",
+        amount_mismatch: "Cổng báo sai số tiền",
+        duplicate_purchase: "Mua lẻ trùng (đã sở hữu)",
+      };
+      // Thao tác gợi ý theo loại bất thường: [hành động, nhãn, cần ghi chú?]
+      const ACTIONS = {
+        paid_no_entitlement: [["regrant", "Cấp lại quyền", false]],
+        pending_stale: [["cancel", "Hủy đơn", false], ["manual_confirm", "Xác nhận thủ công", true]],
+        amount_mismatch: [["manual_confirm", "Xác nhận thủ công", true]],
+        duplicate_purchase: [],
+      };
+      let page = 0;
+      (async () => {
+        if (!(await requireAdmin("orders"))) return;
+        $("app").hidden = false;
+        const money = (o) => vnd(o.amount);
+        const row = (o) => {
+          const acts = (o.issue ? ACTIONS[o.issue] || [] : [])
+            .map(([a, t, need]) => `<button class="btn sm ghost" data-o="${o.id}" data-act="${a}" data-need="${need ? 1 : 0}">${t}</button>`)
+            .join("");
+          return `<div class="list-row" style="align-items:flex-start"><div style="flex:1;min-width:230px"><strong>${esc(o.item_name)}</strong> · ${money(o)}<br>
+            <span class="muted" style="font-size:.85rem">${esc(o.user_name)} · ${fmtDateTime(o.created_at)} · ${esc(o.provider)}${o.provider_txn ? " · " + esc(o.provider_txn) : ""}${o.fail_reason ? " · " + esc(o.fail_reason) : ""}</span>
+            ${o.last_audit ? `<br><span class="muted" style="font-size:.8rem">Đã xử lý: ${esc(o.last_audit)}</span>` : ""}</div>
+            <span class="row" style="flex-direction:column;align-items:stretch"><span class="badge ${o.status === "paid" ? "" : o.status === "pending" ? "lock" : "warn"}">${esc(ORDER_VI[o.status] || o.status)}</span>${
+              o.issue ? `<span class="badge warn">⚠ ${esc(ISSUE_VI[o.issue] || o.issue)}</span>${acts}<button class="btn sm ghost" data-o="${o.id}" data-act="ignore" data-need="1">Bỏ qua (đã xử lý ngoài)</button>` : ""
+            }</span></div>`;
+        };
+        async function summary() {
+          try {
+            const s = await API.adminOrderSummary();
+            const st = s.by_status || {},
+              is = s.issues || {};
+            const n = (k) => st[k] || 0;
+            $("sum").innerHTML =
+              `<div class="card"><b>${n("paid")}</b>Đã thanh toán</div><div class="card"><b>${n("pending")}</b>Đang chờ</div><div class="card"><b>${n("failed")}</b>Thất bại</div><div class="card"><b>${n("cancelled")}</b>Đã hủy</div>` +
+              Object.entries(ISSUE_VI).map(([k, t]) => `<div class="card"><b style="color:${is[k] ? "#c0392b" : "inherit"}">${is[k] || 0}</b>${t}</div>`).join("");
+          } catch (e) {
+            showError($("sum"), e);
+          }
+        }
+        async function load() {
+          $("list").innerHTML = "Đang tải...";
+          try {
+            const os = await API.adminOrders({ status: $("st").value || null, onlyIssues: $("iss").checked, page });
+            $("list").innerHTML = os.map(row).join("") || emptyHTML($("iss").checked ? "Không có đơn bất thường. 🎉" : "Chưa có giao dịch nào.");
+            $("pn").textContent = "Trang " + (page + 1);
+            $("prev").disabled = page === 0;
+            $("next").disabled = os.length < API.PAGE;
+            $("pg").hidden = false;
+          } catch (e) {
+            showError($("list"), e);
+          }
+        }
+        $("st").onchange = $("iss").onchange = () => {
+          page = 0;
+          load();
+        };
+        $("list").onclick = async (e) => {
+          const b = e.target.closest("button[data-act]");
+          if (!b) return;
+          const act = b.dataset.act;
+          let note = null;
+          if (act === "manual_confirm" && !confirm("Chỉ xác nhận thủ công khi đã đối chiếu với cổng thanh toán và chắc chắn tiền đã về. Tiếp tục?")) return;
+          if (b.dataset.need === "1") {
+            note = prompt("Ghi chú bắt buộc (lý do / mã giao dịch đối chiếu):", "");
+            if (note === null) return;
+          } else note = prompt("Ghi chú (không bắt buộc):", "");
+          if (note === null) return;
+          b.disabled = true;
+          try {
+            await API.adminFixOrder(b.dataset.o, act, note || null);
+            showMsg($("m"), "Đã xử lý đơn.", true);
+            summary();
+            load();
+          } catch (err) {
+            showMsg($("m"), err.message);
+            b.disabled = false;
+          }
+        };
+        $("prev").onclick = () => {
+          page--;
+          load();
+        };
+        $("next").onclick = () => {
+          page++;
+          load();
+        };
+        summary();
+        load();
+      })();
+    </script>
+  </body>
+</html>

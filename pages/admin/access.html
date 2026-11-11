@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
+    <title>Chính sách truy cập · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="admin" data-root="../../">
+    <main class="container">
+      <h1 style="margin-top: 20px">Chính sách truy cập truyện</h1>
+      <div id="gate"></div>
+      <div id="app" hidden>
+        <div class="row" style="margin: 12px 0">
+          <input id="q" class="input" type="search" placeholder="Tìm truyện theo tên" style="flex: 1; min-width: 200px" />
+        </div>
+        <div class="card" id="list"></div>
+        <p class="row" style="justify-content: center; margin-top: 12px">
+          <button class="btn ghost sm" id="more" hidden>Xem thêm</button>
+        </p>
+        <form class="card" id="edit" style="margin-top: 12px" hidden>
+          <h2 id="et" style="margin-top: 0"></h2>
+          <div class="radio-row" id="pol">
+            <label><input type="radio" name="policy" value="free" /><span><b>Miễn phí</b><br /><span class="muted">Mọi chương ai cũng đọc được.</span></span></label>
+            <label><input type="radio" name="policy" value="paid" /><span><b>Trả phí</b><br /><span class="muted">Mọi chương cần gói đọc hoặc mua truyện (không có chương đọc thử).</span></span></label>
+            <label><input type="radio" name="policy" value="mixed" /><span><b>Kết hợp</b><br /><span class="muted">Các chương được tick đọc thử miễn phí, chương còn lại trả phí.</span></span></label>
+          </div>
+          <div class="field" id="pricef" hidden>
+            <label for="price">Giá bán lẻ (₫), để trống nếu không bán lẻ</label>
+            <input id="price" class="input" type="number" min="1000" step="1000" style="width: 200px" />
+            <span class="muted" style="font-size: 0.85rem">Đơn hàng giữ giá tại thời điểm tạo đơn; đổi giá không ảnh hưởng đơn cũ.</span>
+          </div>
+          <div id="prev" hidden>
+            <p class="muted" style="margin: 8px 0">Chọn các chương cho đọc thử miễn phí:</p>
+            <div class="check-grid" id="chs"></div>
+          </div>
+          <p class="row" style="margin-top: 12px"><button class="btn">Lưu</button><button type="button" class="btn ghost" id="cancel">Đóng</button></p>
+        </form>
+        <p class="msg" id="m" hidden role="alert"></p>
+      </div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script src="../../assets/js/admin.js"></script>
+    <script>
+      (async () => {
+        if (!(await requireAdmin("access"))) return;
+        $("app").hidden = false;
+        let page = 0,
+          timer,
+          cur = null;
+        const byId = new Map();
+        const rowHTML = (s) =>
+          `<div class="list-row"><span><strong>${esc(s.title)}</strong><br><span class="muted" style="font-size:.85rem">${esc(s.profiles?.display_name || "Ẩn danh")} · ${s.chapter_count} chương · ${s.kind === "comic" ? "Truyện tranh" : "Truyện chữ"}</span></span><span class="row"><span class="badge ${s.access_policy === "free" ? "" : "lock"}">${esc(ACCESS_VI[s.access_policy])}${s.access_policy === "free" ? "" : " · " + (s.price ? vnd(s.price) : "chưa đặt giá")}</span><button class="btn sm" data-id="${s.id}">Thiết lập</button></span></div>`;
+
+        async function load(reset) {
+          if (reset) {
+            page = 0;
+            $("list").innerHTML = "";
+            byId.clear();
+          }
+          try {
+            const items = await API.adminAccessStories($("q").value, page);
+            items.forEach((s) => byId.set(s.id, s));
+            $("list").insertAdjacentHTML("beforeend", items.map(rowHTML).join(""));
+            if (!$("list").children.length) $("list").innerHTML = emptyHTML("Không có truyện đã đăng nào.");
+            $("more").hidden = items.length < API.PAGE;
+          } catch (e) {
+            showError($("list"), e);
+          }
+        }
+
+        async function openEditor(s) {
+          cur = s;
+          $("et").textContent = s.title;
+          document.querySelectorAll('input[name="policy"]').forEach((r) => (r.checked = r.value === s.access_policy));
+          $("price").value = s.price || "";
+          $("m").hidden = true;
+          $("edit").hidden = false;
+          try {
+            const chs = await API.listChapters(s.id);
+            $("chs").innerHTML =
+              chs
+                .map(
+                  (c) =>
+                    `<label><input type="checkbox" value="${c.id}" ${c.is_free_preview ? "checked" : ""}> Chương ${c.number}${c.title ? ": " + esc(c.title) : ""}</label>`,
+                )
+                .join("") || emptyHTML("Truyện chưa có chương nào.");
+          } catch (e) {
+            showError($("chs"), e);
+          }
+          syncPrev();
+          $("edit").scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+        const policy = () => document.querySelector('input[name="policy"]:checked')?.value;
+        const syncPrev = () => {
+          $("prev").hidden = policy() !== "mixed";
+          $("pricef").hidden = !policy() || policy() === "free";
+        };
+
+        $("pol").onchange = syncPrev;
+        $("cancel").onclick = () => ($("edit").hidden = true);
+        $("list").onclick = (e) => {
+          const b = e.target.closest("button[data-id]");
+          if (b) openEditor(byId.get(+b.dataset.id));
+        };
+        $("q").oninput = () => {
+          clearTimeout(timer);
+          timer = setTimeout(() => load(true), 300);
+        };
+        $("more").onclick = () => {
+          page++;
+          load(false);
+        };
+        $("edit").onsubmit = async (e) => {
+          e.preventDefault();
+          const p = policy();
+          if (!p) return showMsg($("m"), "Hãy chọn một chính sách.");
+          const ids = p === "mixed" ? [...$("chs").querySelectorAll("input:checked")].map((i) => +i.value) : null;
+          if (p === "mixed" && !ids.length && !confirm("Chưa chọn chương đọc thử nào, mọi chương sẽ trả phí. Tiếp tục?")) return;
+          const btn = $("edit").querySelector(".btn");
+          btn.disabled = true;
+          try {
+            await API.adminSetStoryAccess(cur.id, p, ids);
+            // giá bán lẻ chỉ có nghĩa với truyện trả phí / kết hợp
+            if (p !== "free") {
+              const price = $("price").value === "" ? null : +$("price").value;
+              if (price !== (cur.price ?? null)) await API.adminSetStoryPrice(cur.id, price);
+            }
+            showMsg($("m"), `Đã lưu chính sách "${ACCESS_VI[p]}" cho "${cur.title}".`, true);
+            $("edit").hidden = true;
+            load(true);
+          } catch (err) {
+            showMsg($("m"), err.message);
+          } finally {
+            btn.disabled = false;
+          }
+        };
+        load(true);
+      })();
+    </script>
+  </body>
+</html>

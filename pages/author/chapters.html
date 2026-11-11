@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#46B07A" />
     <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
     <title>Quản lý chương · TruyệnXanh</title>
     <link
       rel="stylesheet"
@@ -29,6 +33,11 @@
           <label for="files">Ảnh các trang (chọn nhiều ảnh, xếp theo tên file)</label
           ><input id="files" type="file" accept="image/*" multiple />
         </div>
+        <div class="field">
+          <label for="pa">Hẹn giờ phát hành (để trống = phát hành ngay)</label>
+          <input id="pa" type="datetime-local" class="input" style="width: auto" />
+          <span class="muted" style="font-size: 0.85rem">Tới giờ đã hẹn, độc giả mới thấy chương. Bạn vẫn thấy chương hẹn giờ trong danh sách này.</span>
+        </div>
         <div class="row">
           <button class="btn" id="sub">Đăng chương</button
           ><button type="button" class="btn ghost" id="cancel" hidden>Hủy sửa</button>
@@ -47,6 +56,13 @@
         let story,
           editing = null;
         const comic = () => story.kind === "comic";
+        // datetime-local dùng giờ địa phương; DB lưu ISO (UTC)
+        const toLocalInput = (iso) => {
+          const d = new Date(iso);
+          d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+          return d.toISOString().slice(0, 16);
+        };
+        const publishAt = () => ($("pa").value ? new Date($("pa").value).toISOString() : null);
         function mode(ch) {
           editing = ch;
           $("fh").textContent = ch ? `Sửa chương ${ch.number}` : "Thêm chương";
@@ -55,6 +71,7 @@
           $("imgf").hidden = !comic() || !!ch;
           $("textf").hidden = comic();
           $("ct").value = ch?.title || "";
+          $("pa").value = ch?.publish_at ? toLocalInput(ch.publish_at) : "";
           $("cc").value = ch?.content || "";
           $("files").value = "";
         }
@@ -64,7 +81,7 @@
             chs
               .map(
                 (c) =>
-                  `<div class="mine-row"><span>Chương ${c.number}${c.title ? ": " + esc(c.title) : ""}</span><span class="row"><button class="btn ghost" data-e="${c.number}">Sửa</button><button class="btn ghost" data-d="${c.id}">Xóa</button></span></div>`,
+                  `<div class="mine-row"><span>Chương ${c.number}${c.title ? ": " + esc(c.title) : ""}${c.publish_at && new Date(c.publish_at) > new Date() ? ` <span class="badge lock">⏰ Hẹn ${fmtDateTime(c.publish_at)}</span>` : ""}</span><span class="row"><button class="btn ghost" data-e="${c.number}">Sửa</button><button class="btn ghost" data-d="${c.id}">Xóa</button></span></div>`,
               )
               .join("") || emptyHTML("Chưa có chương nào.");
         }
@@ -97,17 +114,18 @@
             try {
               const title = $("ct").value.trim();
               if (editing)
-                await API.updateChapter(editing.id, { title, content: comic() ? null : $("cc").value });
+                await API.updateChapter(editing.id, { title, content: comic() ? null : $("cc").value, publishAt: publishAt() });
               else if (comic()) {
                 if (!$("files").files.length) throw new Error("Hãy chọn ít nhất 1 ảnh.");
                 await API.addComicChapter(id, {
                   title,
                   files: $("files").files,
+                  publishAt: publishAt(),
                   onProgress: (d, n) => showMsg($("cm"), `Đang tải ảnh ${d}/${n}...`, true),
                 });
               } else {
                 if (!$("cc").value.trim()) throw new Error("Hãy nhập nội dung chương.");
-                await API.addChapter(id, { title, content: $("cc").value });
+                await API.addChapter(id, { title, content: $("cc").value, publishAt: publishAt() });
               }
               mode(null);
               await loadList();

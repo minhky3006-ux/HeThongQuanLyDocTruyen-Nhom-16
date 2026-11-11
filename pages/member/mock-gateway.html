@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#46B07A" />
+    <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
+    <title>Cổng thanh toán giả lập · TruyệnXanh</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+  <body data-page="library" data-root="../../">
+    <main class="container narrow">
+      <div class="banner">Cổng thanh toán GIẢ LẬP — chỉ để thử, không trừ tiền thật.</div>
+      <h1 style="margin-top: 20px">Thanh toán</h1>
+      <div class="card" id="box"><p class="empty">Đang tải...</p></div>
+      <p class="msg" id="m" hidden role="alert"></p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../assets/js/config.js"></script>
+    <script src="../../assets/js/api.js"></script>
+    <script src="../../assets/js/ui.js"></script>
+    <script src="../../assets/js/layout.js"></script>
+    <script>
+      (async () => {
+        const id = new URLSearchParams(location.search).get("order");
+        try {
+          const o = await API.getOrder(id);
+          $("box").innerHTML = `<p><b>${esc(o.plans?.name || (o.stories?.title ? "Truyện: " + o.stories.title : "Đơn hàng"))}</b> · ${vnd(o.amount)}</p><p class="muted" style="font-size:.85rem">Mã đơn: ${esc(o.id)}</p>
+            <p class="row" style="margin-top:12px"><button class="btn" data-ok="1">Thanh toán thành công</button><button class="btn ghost" data-ok="0">Thanh toán thất bại</button></p>`;
+          $("box").onclick = async (e) => {
+            const b = e.target.closest("button[data-ok]");
+            if (!b) return;
+            $("box").querySelectorAll("button").forEach((x) => (x.disabled = true));
+            try {
+              await API.mockPay(id, b.dataset.ok === "1");
+              location.href = "checkout.html?order=" + encodeURIComponent(id);
+            } catch (err) {
+              showMsg($("m"), err.message);
+              $("box").querySelectorAll("button").forEach((x) => (x.disabled = false));
+            }
+          };
+        } catch (e) {
+          showError($("box"), e);
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#46B07A" />
     <link rel="manifest" href="../../manifest.json" />
+    <link rel="apple-touch-icon" href="../../assets/img/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TruyệnXanh" />
     <title>Chi tiết truyện · TruyệnXanh</title>
     <link
       rel="stylesheet"
@@ -19,18 +23,7 @@
       <div class="chapters card" id="chs"></div>
       <h2>Đánh giá</h2>
       <div class="card" id="rate"></div>
-      <h2>Bình luận</h2>
-      <div class="card">
-        <form id="cf" style="margin-bottom: 12px">
-          <textarea id="cb" class="input" rows="3" maxlength="2000" placeholder="Viết bình luận..." required></textarea>
-          <p class="row" style="margin-top: 8px"><button class="btn sm">Gửi bình luận</button></p>
-          <p class="msg" id="cm" hidden role="alert"></p>
-        </form>
-        <div id="cl"></div>
-        <p class="row" style="justify-content: center; margin-top: 8px">
-          <button class="btn ghost sm" id="more" hidden>Xem thêm bình luận</button>
-        </p>
-      </div>
+      <p class="muted" style="margin-top: 16px">Bình luận và thảo luận nằm ở từng chương: mở một chương để tham gia.</p>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../../assets/js/config.js"></script>
@@ -41,7 +34,6 @@
       const toLogin = () =>
         (location.href = "../auth/login.html?next=" + encodeURIComponent(location.pathname + location.search));
 
-      // ===== Story 9: đánh giá 1-5 sao =====
       async function setupRating(id, u) {
         const box = $("rate");
         let mine = u ? await API.myRating(id).catch(() => 0) : 0;
@@ -65,65 +57,27 @@
         };
       }
 
-      // ===== Story 9: bình luận (admin ẩn được ở story 18) =====
-      function setupComments(id, u) {
-        let page = 0;
-        const item = (c) =>
-          `<div class="comment"><b>${esc(c.profiles?.display_name || "Ẩn danh")}</b> <span class="muted" style="font-size:.8rem">${new Date(c.created_at).toLocaleString("vi-VN")}</span>${u && u.id === c.user_id ? ` <button class="btn ghost sm" data-del="${c.id}">Xóa</button>` : ""}<p>${esc(c.body)}</p></div>`;
-        async function load(reset) {
-          if (reset) {
-            page = 0;
-            $("cl").innerHTML = "";
-          }
-          try {
-            const cs = await API.listComments(id, page);
-            $("cl").insertAdjacentHTML("beforeend", cs.map(item).join(""));
-            if (!$("cl").children.length) $("cl").innerHTML = emptyHTML("Chưa có bình luận nào.");
-            $("more").hidden = cs.length < API.PAGE;
-          } catch (e) {
-            showError($("cl"), e);
-          }
-        }
-        $("more").onclick = () => {
-          page++;
-          load();
-        };
-        $("cf").onsubmit = async (e) => {
-          e.preventDefault();
-          if (!u) return toLogin();
-          const b = $("cf").querySelector("button");
-          b.disabled = true;
-          try {
-            await API.addComment(id, $("cb").value);
-            $("cf").reset();
-            $("cm").hidden = true;
-            load(true);
-          } catch (err) {
-            showMsg($("cm"), err.message);
-          } finally {
-            b.disabled = false;
-          }
-        };
-        $("cl").onclick = async (e) => {
-          const b = e.target.closest("button[data-del]");
-          if (!b || !confirm("Xóa bình luận của bạn?")) return;
-          try {
-            await API.deleteComment(+b.dataset.del);
-            load(true);
-          } catch (err) {
-            showMsg($("cm"), err.message);
-          }
-        };
-        load(true);
-      }
-
       (async () => {
         const id = +new URLSearchParams(location.search).get("id");
         try {
           const [s, chs, u] = await Promise.all([API.getStory(id), API.listChapters(id), API.currentUser()]);
           document.title = s.title + " · TruyệnXanh";
           let following = false,
-            resume = null;
+            resume = null,
+            unlocked = false; // người xem đã có gói/mua lẻ -> hiện "Đã mở khóa"
+          let access = null; // nguồn quyền đọc (gói / mua lẻ / cả hai)
+          if (u && s.access_policy !== "free") {
+            access = await API.myStoryAccess(id).catch(() => null);
+            unlocked = !!(access && (access.purchased || access.subscription));
+          }
+          // khung quyền đọc. Đã có quyền thì KHÔNG hiện nút mua (tránh thanh toán lại).
+          const here = encodeURIComponent(location.pathname + location.search);
+          const accessBox =
+            s.access_policy === "free"
+              ? ""
+              : unlocked
+                ? `<p class="card" style="padding:10px 14px;margin-top:8px">🔓 ${accessSourceText(access)}</p>`
+                : `<p class="row" style="margin-top:8px">${s.price ? `<a class="btn" href="../member/checkout.html?story=${id}">Mua truyện ${vnd(s.price)}</a>` : ""}<a class="btn ghost" href="../member/checkout.html?back=${here}">Xem các gói đọc</a></p>`;
           if (u) {
             [following, resume] = await Promise.all([API.isFollowing(id), API.getResume(id)]);
           }
@@ -132,7 +86,7 @@
             `<div class="row" style="align-items:flex-start"><div style="width:130px">${coverHTML(s, true)}</div>
       <div style="flex:1;min-width:200px"><h1>${esc(s.title)}</h1>
       <p class="muted">${esc(s.author)} · ${s.rating_count ? "★ " + Number(s.rating_avg).toFixed(1) + " (" + s.rating_count + ")" : "Chưa có đánh giá"} · ${fmt(s.view_count)} lượt đọc</p>
-      <p style="margin:8px 0">${s.genres.map((g) => `<span class="chip">${esc(g.name)}</span>`).join("")}</p><p>${esc(s.description)}</p>
+      <p style="margin:8px 0"><span class="badge ${s.access_policy === "free" ? "" : "lock"}">${esc(ACCESS_VI[s.access_policy] || "Miễn phí")}</span> <span class="badge">${esc(PROGRESS_VI[s.progress] || "Đang ra")}</span> ${s.genres.map((g) => `<span class="chip">${esc(g.name)}</span>`).join("")}</p><p>${esc(s.description)}</p>${accessBox}
       <p class="row" style="margin-top:14px">${startNum ? `<a class="btn" href="reader.html?id=${id}&ch=${startNum}">${resume ? "Đọc tiếp chương " : "Đọc từ chương "}${startNum}</a>` : ""}
       <button class="btn ghost" id="fol"></button></p><p class="msg" id="fm" hidden role="alert"></p></div></div>`;
           const paint = () => {
@@ -152,15 +106,15 @@
               showMsg($("fm"), e.message);
             }
           };
+          // thứ tự chương + nhãn Miễn phí / Trả phí / Đã mở khóa (accessBadge trong ui.js).
           $("chs").innerHTML =
             chs
               .map(
                 (c) =>
-                  `<a href="reader.html?id=${id}&ch=${c.number}">Chương ${c.number}${c.title ? ": " + esc(c.title) : ""}<span class="muted">›</span></a>`,
+                  `<a href="reader.html?id=${id}&ch=${c.number}"><span>Chương ${c.number}${c.title ? ": " + esc(c.title) : ""}${accessBadge(s, c, unlocked)}</span><span class="muted">›</span></a>`,
               )
               .join("") || emptyHTML("Truyện chưa có chương nào.");
           setupRating(id, u);
-          setupComments(id, u);
         } catch (e) {
           showError($("box"), e);
         }
