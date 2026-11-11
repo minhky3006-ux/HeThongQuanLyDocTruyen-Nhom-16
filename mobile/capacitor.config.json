@@ -3,12 +3,11 @@
   "appName": "TruyệnXanh",
   "webDir": "www",
   "server": {
-    "url": "https://truyenxanhvn.com/",
+    "url": "https://minhky3006-ux.github.io/HeThongQuanLyDocTruyen-Nhom-16/",
     "cleartext": false,
     "errorPath": "error.html",
     "allowNavigation": [
-      "truyenxanhvn.com",
-      "*.truyenxanhvn.com",
+      "minhky3006-ux.github.io",
       "*.vnpayment.vn",
       "*.supabase.co"
     ]
